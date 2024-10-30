@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { Providers } from '@/components/providers/Providers'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -22,7 +23,11 @@ export default function RootLayout({
         <Providers>
           <div className="min-h-screen flex flex-col">
             <Header />
-            <main className="flex-1">{children}</main>
+            <main className="flex-1">
+              <ErrorBoundary>
+                {children}
+              </ErrorBoundary>
+            </main>
             <Footer />
           </div>
         </Providers>

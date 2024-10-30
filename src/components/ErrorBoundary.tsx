@@ -8,6 +8,7 @@ interface Props {
 
 interface State {
   hasError: boolean;
+  error?: Error;
 }
 
 export class ErrorBoundary extends React.Component<Props, State> {
@@ -16,8 +17,8 @@ export class ErrorBoundary extends React.Component<Props, State> {
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(_: Error): State {
-    return { hasError: true };
+  static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
@@ -30,6 +31,9 @@ export class ErrorBoundary extends React.Component<Props, State> {
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <h2 className="text-xl font-semibold mb-2">Something went wrong</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              {this.state.error?.message}
+            </p>
             <button
               onClick={() => window.location.reload()}
               className="text-primary hover:underline"
