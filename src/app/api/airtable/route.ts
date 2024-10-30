@@ -1,22 +1,30 @@
 import { NextResponse } from 'next/server';
 import Airtable from 'airtable';
 
+const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
+const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
+const TABLE_NAME = 'Weekly Engagement Survey';
+
 export async function GET() {
   try {
     console.log('Fetching Airtable data...');
     
-    if (!process.env.AIRTABLE_API_KEY || !process.env.AIRTABLE_BASE_ID) {
-      console.error('Missing Airtable credentials');
+    if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID) {
       throw new Error('Missing Airtable credentials');
     }
 
-    const base = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY })
-      .base(process.env.AIRTABLE_BASE_ID);
+    // Initialize Airtable with proper authentication
+    const base = new Airtable({
+      apiKey: AIRTABLE_API_KEY,
+      endpointUrl: 'https://api.airtable.com'
+    }).base(AIRTABLE_BASE_ID);
 
-    console.log('Querying Airtable base:', process.env.AIRTABLE_BASE_ID);
+    console.log('Querying Airtable base:', AIRTABLE_BASE_ID);
 
-    const records = await base('Engagement Tracking').select({
-      view: 'Grid view'
+    // Remove view specification to get all records
+    const records = await base(TABLE_NAME).select({
+      maxRecords: 100,
+      pageSize: 100
     }).all();
 
     console.log('Airtable records fetched:', {
@@ -24,11 +32,16 @@ export async function GET() {
       sampleFields: records[0]?.fields
     });
 
-    return NextResponse.json({ records });
+    return NextResponse.json({ 
+      records: records.map(record => ({
+        id: record.id,
+        fields: record.fields
+      }))
+    });
   } catch (error) {
     console.error('Airtable API error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch Airtable data' },
+      { error: 'Failed to fetch Airtable data', details: error },
       { status: 500 }
     );
   }
