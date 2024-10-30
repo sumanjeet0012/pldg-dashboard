@@ -90,3 +90,60 @@ src/
 ## License
 
 MIT License
+
+## Known Limitations
+
+1. **Historical Data**:
+   - No persistent storage of historical status changes
+   - GitHub status counts reset on page refresh
+   - Limited trend analysis capabilities
+   - Week-over-week comparisons reset on refresh
+
+2. **Real-time Constraints**:
+   - Data freshness limited by API rate limits
+   - Snapshot-based metrics without historical context
+   - Limited ability to track long-term patterns
+
+## Roadmap
+
+### Phase 1 (Current - MVP)
+
+- ✅ Real-time dashboard with key metrics
+- ✅ Airtable and GitHub integration
+- ✅ Basic trend visualization
+- ✅ AI-powered insights
+
+### Phase 2 (Planned)
+
+1. **Historical Data Storage**
+   - Implement database for metric persistence
+   - Track status changes over time
+   - Enable historical trend analysis
+   - Add date-range filtering for all metrics
+
+2. **Enhanced Analytics**
+   - Long-term trend analysis
+   - Predictive engagement metrics
+   - Advanced collaboration patterns
+   - Custom reporting periods
+
+3. **Performance Optimization**
+   - Implement data caching
+   - Optimize API calls
+   - Add pagination for large datasets
+   - Improve load times
+
+### Phase 3 (Future)
+
+1. **Advanced Features**
+   - Custom metric definitions
+   - Automated reporting
+   - Integration with more data sources
+   - Advanced AI analysis
+   - Export capabilities for all metrics
+
+2. **User Experience**
+   - Customizable dashboards
+   - Role-based access control
+   - Mobile optimization
+   - Real-time notifications
