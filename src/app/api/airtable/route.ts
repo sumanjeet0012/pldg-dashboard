@@ -9,7 +9,14 @@ export async function GET() {
   try {
     console.log('Fetching Airtable data...');
     
+    console.log('Airtable API called with credentials:', {
+      hasApiKey: !!AIRTABLE_API_KEY,
+      hasBaseId: !!AIRTABLE_BASE_ID,
+      tableName: TABLE_NAME
+    });
+
     if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID) {
+      console.error('Missing Airtable credentials');
       throw new Error('Missing Airtable credentials');
     }
 
@@ -21,15 +28,14 @@ export async function GET() {
 
     console.log('Querying Airtable base:', AIRTABLE_BASE_ID);
 
-    // Remove view specification to get all records
+    // Remove view specification and just get all records
     const records = await base(TABLE_NAME).select({
-      maxRecords: 100,
-      pageSize: 100
+      maxRecords: 100
     }).all();
 
     console.log('Airtable records fetched:', {
       count: records.length,
-      sampleFields: records[0]?.fields
+      fields: records[0]?.fields ? Object.keys(records[0].fields) : []
     });
 
     return NextResponse.json({ 
@@ -38,10 +44,14 @@ export async function GET() {
         fields: record.fields
       }))
     });
-  } catch (error) {
-    console.error('Airtable API error:', error);
+  } catch (error: any) {
+    console.error('Airtable API error:', {
+      message: error.message,
+      error: error,
+      stack: error.stack
+    });
     return NextResponse.json(
-      { error: 'Failed to fetch Airtable data', details: error },
+      { error: 'Failed to fetch Airtable data', details: error.message },
       { status: 500 }
     );
   }

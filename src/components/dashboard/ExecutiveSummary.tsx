@@ -14,12 +14,12 @@ interface Props {
 }
 
 const METRIC_EXPLANATIONS = {
-  weeklyChange: "Percentage change in total contributions compared to previous week",
-  activeContributors: "Number of unique contributors with at least one contribution in the past week",
-  totalContributions: "Sum of all PRs, issues, and technical contributions across all tech partners",
-  npsScore: "Net Promoter Score calculated from weekly engagement surveys",
-  engagementRate: "Percentage of contributors actively participating in discussions and contributions",
-  activeTechPartners: "Number of tech partners with active contributions this week"
+  weeklyChange: "Percentage change in total contributions compared to last week. Calculated from both GitHub and Airtable data.",
+  activeContributors: "Number of unique contributors who submitted at least one contribution in the current week.",
+  totalContributions: "Total number of issues, PRs, and technical contributions across all tech partners.",
+  npsScore: "Net Promoter Score (range: -100 to 100) calculated from weekly engagement surveys.",
+  engagementRate: "Percentage of contributors actively participating in program activities and submissions.",
+  activeTechPartners: "Number of tech partners with at least one active contribution or engagement this week."
 };
 
 export default function ExecutiveSummary({ data, onExport }: Props) {
@@ -81,14 +81,22 @@ export default function ExecutiveSummary({ data, onExport }: Props) {
             <h3 className="font-semibold">Weekly Performance</h3>
             <div className="space-y-3">
               <div className="flex items-center gap-3">
-                {insights.weeklyChange.issues >= 0 ? (
-                  <TrendingUp className="text-green-500" size={20} />
-                ) : (
-                  <TrendingDown className="text-red-500" size={20} />
-                )}
-                <span>
-                  {Math.abs(insights.weeklyChange.issues)}% WoW
-                </span>
+                <div className="flex items-center gap-2">
+                  {insights.weeklyChange.issues >= 0 ? (
+                    <TrendingUp className="text-green-500" size={20} />
+                  ) : (
+                    <TrendingDown className="text-red-500" size={20} />
+                  )}
+                  <span>
+                    {Math.round(Math.abs(insights.weeklyChange.issues))}% WoW
+                  </span>
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent>{METRIC_EXPLANATIONS.weeklyChange}</TooltipContent>
+                  </Tooltip>
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 <Users className="text-blue-500" size={20} />
@@ -106,8 +114,16 @@ export default function ExecutiveSummary({ data, onExport }: Props) {
             <h3 className="font-semibold">Program Health</h3>
             <div className="space-y-3">
               <div className="flex items-center gap-3">
-                <Star className="text-yellow-500" size={20} />
-                <span>NPS Score: {insights.programHealth.nps}</span>
+                <div className="flex items-center gap-2">
+                  <Star className="text-yellow-500" size={20} />
+                  <span>NPS Score: {insights.programHealth.nps}</span>
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent>{METRIC_EXPLANATIONS.npsScore}</TooltipContent>
+                  </Tooltip>
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 <Activity className="text-green-500" size={20} />

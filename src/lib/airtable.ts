@@ -7,15 +7,19 @@ async function fetchAirtableData(): Promise<EngagementData[]> {
   try {
     console.log('Starting Airtable data fetch...');
     const response = await fetch('/api/airtable');
-    console.log('API Response:', response.status);
+    console.log('Airtable API Response Status:', response.status);
 
     if (!response.ok) {
-      console.error('API error status:', response.status);
-      throw new Error(`API error: ${response.statusText}`);
+      console.error('Airtable API error status:', response.status);
+      throw new Error(`Airtable API error: ${response.statusText}`);
     }
 
     const data = await response.json();
-    console.log('Raw Airtable response:', data);
+    console.log('Raw Airtable response:', {
+      hasRecords: !!data.records,
+      recordCount: data.records?.length,
+      sampleFields: data.records?.[0]?.fields ? Object.keys(data.records[0].fields) : []
+    });
 
     if (!data.records) {
       console.error('Invalid data format:', data);
@@ -24,21 +28,28 @@ async function fetchAirtableData(): Promise<EngagementData[]> {
     
     // Transform the data
     const transformedData = data.records.map((record: any) => {
-      console.log('Processing record fields:', record.fields);
+      console.log('Processing record:', {
+        hasFields: !!record.fields,
+        fieldNames: record.fields ? Object.keys(record.fields) : []
+      });
+      
       return {
-        ...record.fields,
         'Program Week': record.fields['Program Week'] || '',
+        'Name': record.fields['Name'] || '',
         'Engagement Participation ': record.fields['Engagement Participation '] || '',
         'Tech Partner Collaboration?': record.fields['Tech Partner Collaboration?'] || 'No',
         'Which Tech Partner': record.fields['Which Tech Partner'] || '',
         'How many issues, PRs, or projects this week?': record.fields['How many issues, PRs, or projects this week?'] || '0',
-        'Name': record.fields['Name'] || '',
-        'PLDG Feedback': record.fields['PLDG Feedback'] || '',
-        'How likely are you to recommend the PLDG to others?': record.fields['How likely are you to recommend the PLDG to others?'] || '0'
+        'How likely are you to recommend the PLDG to others?': record.fields['How likely are you to recommend the PLDG to others?'] || '0',
+        'PLDG Feedback': record.fields['PLDG Feedback'] || ''
       };
     });
 
-    console.log('Transformed Airtable data:', transformedData);
+    console.log('Transformed Airtable data:', {
+      count: transformedData.length,
+      sampleEntry: transformedData[0]
+    });
+
     return transformedData;
   } catch (error) {
     console.error('Error fetching Airtable data:', error);
@@ -55,10 +66,17 @@ export function useAirtableData() {
       revalidateOnFocus: true,
       dedupingInterval: 10000,
       onError: (error) => {
-        console.error('SWR error:', error);
+        console.error('SWR Airtable error:', error);
       }
     }
   );
+
+  console.log('Airtable hook state:', {
+    hasData: !!data,
+    dataLength: data?.length,
+    isError: !!error,
+    errorMessage: error?.message
+  });
 
   return {
     data,
