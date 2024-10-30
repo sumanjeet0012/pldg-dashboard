@@ -21,7 +21,7 @@ export default function TechnicalProgressChart({ data }: Props) {
   const yAxisTicks = Array.from({ length: 5 }, (_, i) => Math.round(maxIssues * i / 4));
 
   return (
-    <Card>
+    <Card className="h-[500px]">
       <CardHeader>
         <div className="flex justify-between items-start">
           <div>
@@ -50,25 +50,39 @@ export default function TechnicalProgressChart({ data }: Props) {
           </div>
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="week" />
-              <YAxis domain={[0, maxIssues]} ticks={yAxisTicks} />
-              <Tooltip />
-              <Line 
-                type="monotone" 
-                dataKey="Total Issues" 
-                stroke="#2196F3"
-                strokeWidth={2}
-                dot={{ r: 4 }}
-                activeDot={{ r: 6 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+      <CardContent className="h-[400px] pt-4">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+            <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+            <XAxis 
+              dataKey="week" 
+              tick={{ fontSize: 12 }}
+              tickMargin={10}
+            />
+            <YAxis 
+              domain={[0, maxIssues]} 
+              ticks={yAxisTicks}
+              tick={{ fontSize: 12 }}
+              tickMargin={10}
+            />
+            <Tooltip 
+              contentStyle={{ 
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                borderRadius: '6px',
+                padding: '8px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+              }}
+            />
+            <Line 
+              type="monotone" 
+              dataKey="Total Issues" 
+              stroke="#2196F3"
+              strokeWidth={3}
+              dot={{ r: 4, strokeWidth: 2 }}
+              activeDot={{ r: 7 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
       </CardContent>
     </Card>
   );

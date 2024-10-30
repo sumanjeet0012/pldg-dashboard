@@ -2,38 +2,14 @@
 
 import * as React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
-import { ProcessedData } from '@/types/dashboard';
+import { ProcessedData, EngagementData, GitHubData } from '@/types/dashboard';
 import { Download, TrendingUp, TrendingDown, Users, GitPullRequest, Star, Target, Activity, ThumbsUp } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { HelpCircle } from 'lucide-react';
-
-interface EngagementEntry {
-  'Which Tech Partner'?: string;
-  'Program Week'?: string;
-  'Engagement Tracking'?: string;
-  'How likely are you to recommend the PLDG to others?'?: string;
-  'How many issues, PRs, or projects this week?'?: string;
-  // Add other fields as needed
-}
-
-interface Insights {
-  weeklyChange: {
-    issues: number;
-    contributors: number;
-    partners: number;
-  };
-  programHealth: {
-    nps: number;
-    engagementRate: number;
-    totalContributions: number;
-  };
-  keyHighlights: string[];
-}
+import { calculateEngagementScore } from '@/lib/utils';
 
 interface Props {
-  data: ProcessedData & {
-    rawData?: EngagementEntry[];
-  };
+  data: ProcessedData;
   onExport: () => void;
 }
 
@@ -47,48 +23,35 @@ const METRIC_EXPLANATIONS = {
 };
 
 export default function ExecutiveSummary({ data, onExport }: Props) {
-  const insights: Insights = React.useMemo(() => {
-    // Get entries from CSV data
-    const entries = data.rawData || [];
-    
-    // Get unique tech partners from the data
-    const activePartners = new Set(
-      entries.flatMap((entry: EngagementEntry) => 
-        entry['Which Tech Partner']?.split(',').map((p: string) => p.trim()) ?? []
-      )
-    ).size;
-    
-    // Filter out empty or undefined tech partners
-    const validPartners = ['IPFS', 'Libp2p', 'Fil-B', 'Fil-Oz', 'Coordination Network', 'Storacha', 'Helia'];
+  const insights = React.useMemo(() => {
+    // Use the processed data directly instead of raw data
+    const totalActiveContributors = data.activeContributors;
+    const totalContributions = data.totalContributions;
+    const weeklyChange = data.weeklyChange;
+    const nps = data.programHealth.npsScore;
+    const engagementRate = data.programHealth.engagementRate;
+    const activeTechPartners = data.programHealth.activeTechPartners;
 
-    // Calculate total contributions
-    const totalContributions = entries.reduce((sum, entry) => {
-      const issueCount = entry['How many issues, PRs, or projects this week?'];
-      return sum + (parseInt(issueCount as string) || 0);
-    }, 0);
+    // Calculate positive feedback from feedbackSentiment
+    const positiveFeedback = data.feedbackSentiment.positive;
 
-    // Generate key highlights
-    const keyHighlights = [
-      `${activePartners} active contributors across ${validPartners.length} tech partners`,
-      `${totalContributions} total contributions`,
-      `${calculatePositiveFeedback(entries)} positive feedback responses`,
-      `${Math.abs(Math.round(data.technicalProgress?.[0]?.['Total Issues'] || 0))}% ${
-        (data.technicalProgress?.[0]?.['Total Issues'] || 0) > 0 ? 'increase' : 'decrease'
-      } in weekly contributions`
-    ];
-    
     return {
       weeklyChange: {
-        issues: data.technicalProgress?.[0]?.['Total Issues'] || 0,
-        contributors: activePartners,
-        partners: validPartners.length
+        issues: weeklyChange,
+        contributors: totalActiveContributors,
+        partners: activeTechPartners
       },
       programHealth: {
-        nps: calculateNPS(entries),
-        engagementRate: calculateEngagementRate(entries),
+        nps,
+        engagementRate,
         totalContributions
       },
-      keyHighlights
+      keyHighlights: [
+        `${totalActiveContributors} active contributors across ${activeTechPartners} tech partners`,
+        `${totalContributions} total contributions`,
+        `${positiveFeedback} positive feedback responses`,
+        `${Math.abs(Math.round(weeklyChange))}% ${weeklyChange >= 0 ? 'increase' : 'decrease'} in weekly contributions`
+      ]
     };
   }, [data]);
 
@@ -118,21 +81,13 @@ export default function ExecutiveSummary({ data, onExport }: Props) {
             <h3 className="font-semibold">Weekly Performance</h3>
             <div className="space-y-3">
               <div className="flex items-center gap-3">
-                <TrendingUp className="text-green-500" size={20} />
-                <span className="flex items-center gap-2">
-                  <span className="text-green-500">
-                    {Math.abs(Math.round(insights.weeklyChange.issues))}% WoW
-                  </span>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button className="text-muted-foreground hover:text-foreground">
-                        <HelpCircle className="w-4 h-4" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {METRIC_EXPLANATIONS.weeklyChange}
-                    </TooltipContent>
-                  </Tooltip>
+                {insights.weeklyChange.issues >= 0 ? (
+                  <TrendingUp className="text-green-500" size={20} />
+                ) : (
+                  <TrendingDown className="text-red-500" size={20} />
+                )}
+                <span>
+                  {Math.abs(insights.weeklyChange.issues)}% WoW
                 </span>
               </div>
               <div className="flex items-center gap-3">
@@ -152,11 +107,11 @@ export default function ExecutiveSummary({ data, onExport }: Props) {
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <Star className="text-yellow-500" size={20} />
-                <span>NPS Score: {Math.round(insights.programHealth.nps)}</span>
+                <span>NPS Score: {insights.programHealth.nps}</span>
               </div>
               <div className="flex items-center gap-3">
                 <Activity className="text-green-500" size={20} />
-                <span>Engagement Rate: {Math.round(insights.programHealth.engagementRate)}%</span>
+                <span>Engagement Rate: {insights.programHealth.engagementRate}%</span>
               </div>
               <div className="flex items-center gap-3">
                 <Target className="text-blue-500" size={20} />
@@ -187,35 +142,4 @@ export default function ExecutiveSummary({ data, onExport }: Props) {
       </CardContent>
     </Card>
   );
-}
-
-function calculateNPS(entries: EngagementEntry[]): number {
-  const scores = entries
-    .map(entry => parseInt(entry['How likely are you to recommend the PLDG to others?'] || '0'))
-    .filter(score => !isNaN(score));
-
-  if (scores.length === 0) return 0;
-
-  const promoters = scores.filter(score => score >= 9).length;
-  const detractors = scores.filter(score => score <= 6).length;
-  
-  return Math.round(((promoters - detractors) / scores.length) * 100);
-}
-
-function calculateEngagementRate(entries: EngagementEntry[]): number {
-  const totalEntries = entries.length;
-  if (totalEntries === 0) return 0;
-
-  const activeEntries = entries.filter(entry => 
-    entry['Engagement Tracking']?.includes('Highly engaged') || 
-    entry['Engagement Tracking']?.includes('Actively listened')
-  ).length;
-
-  return Math.round((activeEntries / totalEntries) * 100);
-}
-
-function calculatePositiveFeedback(entries: EngagementEntry[]): number {
-  return entries.filter(entry => 
-    parseInt(entry['How likely are you to recommend the PLDG to others?'] || '0') >= 8
-  ).length;
 } 
