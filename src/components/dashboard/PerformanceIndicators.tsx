@@ -2,6 +2,11 @@ import { ProcessedData } from "@/types/dashboard";
 import { KPICard } from "./KPICard";
 
 export function PerformanceIndicators({ data }: { data: ProcessedData }) {
+  const latestIssueMetrics = data.issueMetrics[data.issueMetrics.length - 1];
+  const completionRate = latestIssueMetrics
+    ? Math.round((latestIssueMetrics.closed / latestIssueMetrics.total) * 100)
+    : 0;
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
       <KPICard
@@ -27,8 +32,7 @@ export function PerformanceIndicators({ data }: { data: ProcessedData }) {
       />
       <KPICard
         title="Project Completion"
-        value={`${Math.round((data.issueMetrics[data.issueMetrics.length - 1]?.closed || 0) / 
-          (data.issueMetrics[data.issueMetrics.length - 1]?.total || 1) * 100)}%`}
+        value={`${completionRate}%`}
         trend={+12}
         status="positive"
         description="On-time delivery rate"
