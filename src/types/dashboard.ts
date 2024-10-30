@@ -134,7 +134,7 @@ export interface GitHubData {
             id: string;
             content: {
               title: string;
-              state: 'OPEN' | 'CLOSED';
+              state: string;
               createdAt: string;
               closedAt: string | null;
             } | null;
@@ -148,5 +148,11 @@ export interface GitHubData {
     state: string;
     created_at: string;
     closed_at: string | null;
+    status?: string;
   }>;
+  statusGroups?: {
+    todo: number;
+    inProgress: number;
+    done: number;
+  };
 } 

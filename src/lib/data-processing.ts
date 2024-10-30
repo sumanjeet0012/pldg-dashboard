@@ -145,8 +145,9 @@ export function useProcessedData() {
       return null;
     }
 
-    // Add null check for githubData.issues
+    // Add null check for githubData.issues and statusGroups
     const issues = githubData?.issues || [];
+    const statusGroups = githubData?.statusGroups || { todo: 0, inProgress: 0, done: 0 };
 
     // 1. Weekly Performance
     const totalContributions = airtableData.reduce((sum, entry) => {
@@ -245,7 +246,9 @@ export function useProcessedData() {
         week,
         'Total Issues': entries.reduce((sum, entry) => 
           sum + parseInt(entry['How many issues, PRs, or projects this week?'] || '0'), 0
-        )
+        ),
+        'In Progress': statusGroups.inProgress,
+        'Completed': statusGroups.done
       })),
       issueMetrics: [{
         week: new Date().toISOString().split('T')[0],

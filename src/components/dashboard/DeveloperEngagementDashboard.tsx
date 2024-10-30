@@ -82,7 +82,13 @@ export default function DeveloperEngagementDashboard() {
           <EngagementChart data={data.engagementTrends} />
         </Suspense>
         <Suspense fallback={<LoadingCard />}>
-          <TechnicalProgressChart data={data.technicalProgress} />
+          <TechnicalProgressChart 
+            data={data.technicalProgress} 
+            githubData={{
+              inProgress: data.issueMetrics[0]?.open || 0,
+              completed: data.issueMetrics[0]?.closed || 0
+            }}
+          />
         </Suspense>
       </div>
 

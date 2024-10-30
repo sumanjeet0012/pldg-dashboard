@@ -8,6 +8,12 @@ const USERNAME = 'kt-wawro';
 
 interface ProjectItem {
   id: string;
+  fieldValues: {
+    nodes: Array<{
+      field: { name: string }
+      text: string
+    }>
+  }
   content: {
     title: string;
     state: string;
@@ -43,6 +49,18 @@ export async function GET(): Promise<NextResponse<GitHubData>> {
               items(first: 100) {
                 nodes {
                   id
+                  fieldValues(first: 8) {
+                    nodes {
+                      ... on ProjectV2ItemFieldTextValue {
+                        field { name }
+                        text
+                      }
+                      ... on ProjectV2ItemFieldSingleSelectValue {
+                        field { name }
+                        name
+                      }
+                    }
+                  }
                   content {
                     ... on Issue {
                       title
@@ -80,14 +98,22 @@ export async function GET(): Promise<NextResponse<GitHubData>> {
     const data = await response.json();
     const items = (data.data?.user?.projectV2?.items?.nodes || []) as ProjectItem[];
 
-    // Transform the data to match our expected format
+    // Group items by status
+    const statusGroups = {
+      todo: items.filter(item => getItemStatus(item) === 'Todo').length,
+      inProgress: items.filter(item => getItemStatus(item) === 'In Progress').length,
+      done: items.filter(item => getItemStatus(item) === 'Done').length
+    };
+
+    // Transform the data
     const issues = items
       .filter((item: ProjectItem) => item.content)
       .map((item: ProjectItem) => ({
         title: item.content!.title,
         state: item.content!.state,
         created_at: item.content!.createdAt,
-        closed_at: item.content!.closedAt
+        closed_at: item.content!.closedAt,
+        status: getItemStatus(item)
       }));
 
     console.log('GitHub Project data fetched:', {
@@ -97,7 +123,8 @@ export async function GET(): Promise<NextResponse<GitHubData>> {
 
     const responseData: GitHubData = { 
       project: data.data,
-      issues 
+      issues,
+      statusGroups
     };
 
     // Validate the response data
@@ -111,7 +138,19 @@ export async function GET(): Promise<NextResponse<GitHubData>> {
     return NextResponse.json({ 
       issues: [],
       project: { user: { projectV2: { items: { nodes: [] } } } },
+      statusGroups: {
+        todo: 0,
+        inProgress: 0,
+        done: 0
+      },
       _error: error instanceof Error ? error.message : 'Unknown error'
     } as GitHubData);
   }
+}
+
+function getItemStatus(item: ProjectItem): string {
+  const statusField = item.fieldValues.nodes.find(node => 
+    node.field.name.toLowerCase() === 'status'
+  );
+  return statusField?.text || 'Todo';
 } 

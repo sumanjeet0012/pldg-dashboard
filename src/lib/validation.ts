@@ -9,6 +9,12 @@ export const githubDataSchema = z.object({
         items: z.object({
           nodes: z.array(z.object({
             id: z.string(),
+            fieldValues: z.object({
+              nodes: z.array(z.object({
+                field: z.object({ name: z.string() }),
+                text: z.string()
+              }))
+            }),
             content: z.object({
               title: z.string(),
               state: z.enum(['OPEN', 'CLOSED']),
@@ -24,8 +30,14 @@ export const githubDataSchema = z.object({
     title: z.string(),
     state: z.string(),
     created_at: z.string(),
-    closed_at: z.string().nullable()
-  }))
+    closed_at: z.string().nullable(),
+    status: z.string().optional()
+  })),
+  statusGroups: z.object({
+    todo: z.number(),
+    inProgress: z.number(),
+    done: z.number()
+  })
 }) satisfies z.ZodType<GitHubData>;
 
 // Engagement data validation schema

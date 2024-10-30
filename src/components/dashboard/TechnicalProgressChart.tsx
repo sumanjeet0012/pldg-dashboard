@@ -2,13 +2,17 @@
 
 import * as React from 'react';
 import { TechnicalProgress } from '../../types/dashboard';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '../ui/card';
 import { ExternalLink } from 'lucide-react';
 import { Button } from '../ui/button';
 
 interface Props {
   data: TechnicalProgress[];
+  githubData?: {
+    inProgress?: number;
+    completed?: number;
+  };
 }
 
 const GITHUB_LINKS = {
@@ -16,9 +20,19 @@ const GITHUB_LINKS = {
   issues: "https://github.com/users/kt-wawro/projects/7/views/1?filterQuery=is%3Aissue"
 };
 
-export default function TechnicalProgressChart({ data }: Props) {
-  const maxIssues = Math.max(...data.map(d => d['Total Issues']));
-  const yAxisTicks = Array.from({ length: 5 }, (_, i) => Math.round(maxIssues * i / 4));
+export default function TechnicalProgressChart({ data, githubData }: Props) {
+  // Combine the data
+  const combinedData = data.map((weekData, index) => ({
+    week: weekData.week,
+    'New Issues': weekData['Total Issues'],
+    'In Progress': githubData?.inProgress || 0,
+    'Completed': githubData?.completed || 0
+  }));
+
+  const maxValue = Math.max(
+    ...combinedData.map(d => Math.max(d['New Issues'], d['In Progress'], d['Completed']))
+  );
+  const yAxisTicks = Array.from({ length: 5 }, (_, i) => Math.round(maxValue * i / 4));
 
   return (
     <Card className="h-[500px]">
@@ -52,7 +66,7 @@ export default function TechnicalProgressChart({ data }: Props) {
       </CardHeader>
       <CardContent className="h-[400px] pt-4">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+          <LineChart data={combinedData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
             <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
             <XAxis 
               dataKey="week" 
@@ -60,7 +74,7 @@ export default function TechnicalProgressChart({ data }: Props) {
               tickMargin={10}
             />
             <YAxis 
-              domain={[0, maxIssues]} 
+              domain={[0, maxValue]} 
               ticks={yAxisTicks}
               tick={{ fontSize: 12 }}
               tickMargin={10}
@@ -73,11 +87,28 @@ export default function TechnicalProgressChart({ data }: Props) {
                 boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
               }}
             />
+            <Legend />
             <Line 
               type="monotone" 
-              dataKey="Total Issues" 
+              dataKey="New Issues"
               stroke="#2196F3"
-              strokeWidth={3}
+              strokeWidth={2}
+              dot={{ r: 4, strokeWidth: 2 }}
+              activeDot={{ r: 7 }}
+            />
+            <Line 
+              type="monotone" 
+              dataKey="In Progress"
+              stroke="#FFA726"
+              strokeWidth={2}
+              dot={{ r: 4, strokeWidth: 2 }}
+              activeDot={{ r: 7 }}
+            />
+            <Line 
+              type="monotone" 
+              dataKey="Completed"
+              stroke="#66BB6A"
+              strokeWidth={2}
               dot={{ r: 4, strokeWidth: 2 }}
               activeDot={{ r: 7 }}
             />
