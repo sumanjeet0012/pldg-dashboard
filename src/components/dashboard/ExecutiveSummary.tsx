@@ -24,7 +24,6 @@ const METRIC_EXPLANATIONS = {
 
 export default function ExecutiveSummary({ data, onExport }: Props) {
   const insights = React.useMemo(() => {
-    // Use the processed data directly instead of raw data
     const totalActiveContributors = data.activeContributors;
     const totalContributions = data.totalContributions;
     const weeklyChange = data.weeklyChange;

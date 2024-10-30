@@ -1,10 +1,22 @@
 import { NextResponse } from 'next/server';
+import { GitHubData } from '@/types/dashboard';
+import { isValidGitHubData } from '@/lib/validation';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-const OWNER = 'protocol-labs';
-const REPO = 'pldg';
+const PROJECT_ID = '7';
+const USERNAME = 'kt-wawro';
 
-export async function GET() {
+interface ProjectItem {
+  id: string;
+  content: {
+    title: string;
+    state: string;
+    createdAt: string;
+    closedAt: string | null;
+  } | null;
+}
+
+export async function GET(): Promise<NextResponse<GitHubData>> {
   try {
     console.log('GitHub API route called');
     
@@ -13,57 +25,93 @@ export async function GET() {
       throw new Error('GitHub token not found');
     }
 
-    console.log('Fetching GitHub data with token:', GITHUB_TOKEN.slice(0, 4) + '...');
+    console.log('Fetching GitHub Project data...');
 
     const headers = {
-      'Authorization': `token ${GITHUB_TOKEN}`,
+      'Authorization': `Bearer ${GITHUB_TOKEN}`,
       'Accept': 'application/vnd.github.v3+json',
       'X-GitHub-Api-Version': '2022-11-28',
       'User-Agent': 'PLDG-Dashboard'
     };
 
-    // Test the token first
-    const testResponse = await fetch('https://api.github.com/user', { headers });
-    if (!testResponse.ok) {
-      console.error('GitHub token validation failed:', testResponse.status);
-      throw new Error(`GitHub token validation failed: ${testResponse.statusText}`);
-    }
+    // Fetch project data using the GraphQL API
+    const projectQuery = {
+      query: `
+        query {
+          user(login: "${USERNAME}") {
+            projectV2(number: ${PROJECT_ID}) {
+              items(first: 100) {
+                nodes {
+                  id
+                  content {
+                    ... on Issue {
+                      title
+                      state
+                      createdAt
+                      closedAt
+                    }
+                    ... on PullRequest {
+                      title
+                      state
+                      createdAt
+                      closedAt
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      `
+    };
 
-    // Fetch both issues and PRs
-    const [issuesResponse, prsResponse] = await Promise.all([
-      fetch(`https://api.github.com/repos/${OWNER}/${REPO}/issues?state=all&per_page=100`, {
-        headers
-      }),
-      fetch(`https://api.github.com/repos/${OWNER}/${REPO}/pulls?state=all&per_page=100`, {
-        headers
-      })
-    ]);
-
-    console.log('GitHub API Response Status:', {
-      issues: issuesResponse.status,
-      prs: prsResponse.status
+    const response = await fetch('https://api.github.com/graphql', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(projectQuery)
     });
 
-    if (!issuesResponse.ok || !prsResponse.ok) {
-      throw new Error(`GitHub API error: ${issuesResponse.statusText || prsResponse.statusText}`);
+    console.log('GitHub API Response Status:', response.status);
+
+    if (!response.ok) {
+      throw new Error(`GitHub API error: ${response.statusText}`);
     }
 
-    const [issues, prs] = await Promise.all([
-      issuesResponse.json(),
-      prsResponse.json()
-    ]);
+    const data = await response.json();
+    const items = (data.data?.user?.projectV2?.items?.nodes || []) as ProjectItem[];
 
-    console.log('GitHub data fetched:', {
-      issuesCount: issues.length,
-      prsCount: prs.length
+    // Transform the data to match our expected format
+    const issues = items
+      .filter((item: ProjectItem) => item.content)
+      .map((item: ProjectItem) => ({
+        title: item.content!.title,
+        state: item.content!.state,
+        created_at: item.content!.createdAt,
+        closed_at: item.content!.closedAt
+      }));
+
+    console.log('GitHub Project data fetched:', {
+      itemsCount: items.length,
+      issuesCount: issues.length
     });
 
-    return NextResponse.json({ issues: [...issues, ...prs] });
+    const responseData: GitHubData = { 
+      project: data.data,
+      issues 
+    };
+
+    // Validate the response data
+    if (!isValidGitHubData(responseData)) {
+      throw new Error('Invalid GitHub data structure');
+    }
+
+    return NextResponse.json(responseData);
   } catch (error) {
     console.error('GitHub API error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch GitHub data', details: error },
-      { status: 500 }
-    );
+    return NextResponse.json({ 
+      issues: [],
+      project: { user: { projectV2: { items: { nodes: [] } } } },
+      _error: error instanceof Error ? error.message : 'Unknown error'
+    } as GitHubData);
   }
 } 
