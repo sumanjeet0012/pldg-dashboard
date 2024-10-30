@@ -31,26 +31,8 @@ export default function DeveloperEngagementDashboard() {
     URL.revokeObjectURL(url);
   }, [data]);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-muted-foreground">Loading dashboard data...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <p className="text-red-500">Error loading dashboard data</p>
-          <p className="text-muted-foreground mt-2">Please try refreshing the page</p>
-        </div>
-      </div>
-    );
+  if (isLoading || !data) {
+    return <LoadingCard />;
   }
 
   return (
@@ -86,7 +68,7 @@ export default function DeveloperEngagementDashboard() {
             data={data.technicalProgress} 
             githubData={{
               inProgress: data.issueMetrics[0]?.open || 0,
-              completed: data.issueMetrics[0]?.closed || 0
+              done: data.issueMetrics[0]?.closed || 0
             }}
           />
         </Suspense>

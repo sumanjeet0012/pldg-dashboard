@@ -10,8 +10,8 @@ import { Button } from '../ui/button';
 interface Props {
   data: TechnicalProgress[];
   githubData?: {
-    inProgress?: number;
-    completed?: number;
+    inProgress: number;
+    done: number;
   };
 }
 
@@ -21,18 +21,26 @@ const GITHUB_LINKS = {
 };
 
 export default function TechnicalProgressChart({ data, githubData }: Props) {
-  // Combine the data
-  const combinedData = data.map((weekData, index) => ({
+  if (!data || !data.length) {
+    return (
+      <Card className="h-[500px]">
+        <CardHeader>
+          <CardTitle>Technical Progress</CardTitle>
+          <CardDescription>Weekly contribution tracking</CardDescription>
+        </CardHeader>
+        <CardContent className="h-[400px] pt-4 flex items-center justify-center">
+          <div className="text-muted-foreground">Loading data...</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const combinedData = data.map((weekData) => ({
     week: weekData.week,
     'New Issues': weekData['Total Issues'],
     'In Progress': githubData?.inProgress || 0,
-    'Completed': githubData?.completed || 0
+    'Completed': githubData?.done || 0
   }));
-
-  const maxValue = Math.max(
-    ...combinedData.map(d => Math.max(d['New Issues'], d['In Progress'], d['Completed']))
-  );
-  const yAxisTicks = Array.from({ length: 5 }, (_, i) => Math.round(maxValue * i / 4));
 
   return (
     <Card className="h-[500px]">
@@ -74,8 +82,7 @@ export default function TechnicalProgressChart({ data, githubData }: Props) {
               tickMargin={10}
             />
             <YAxis 
-              domain={[0, maxValue]} 
-              ticks={yAxisTicks}
+              domain={[0, 'auto']}
               tick={{ fontSize: 12 }}
               tickMargin={10}
             />

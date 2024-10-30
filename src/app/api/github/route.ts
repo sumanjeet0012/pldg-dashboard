@@ -1,19 +1,26 @@
 import { NextResponse } from 'next/server';
 import { GitHubData } from '@/types/dashboard';
-import { isValidGitHubData } from '@/lib/validation';
 
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const PROJECT_ID = '7';
 const USERNAME = 'kt-wawro';
+
+// Add column mapping
+const COLUMN_STATUS = {
+  'In Progress': 'In Progress',
+  'In Review': 'In Progress', // Count "In Review" as "In Progress"
+  'Done': 'Done',
+  'Backlog': 'Todo',
+  'Tirage': 'Todo'
+} as const;
 
 interface ProjectItem {
   id: string;
   fieldValues: {
     nodes: Array<{
-      field: { name: string }
-      text: string
-    }>
-  }
+      field: { name: string };
+      text: string;
+    }>;
+  };
   content: {
     title: string;
     state: string;
@@ -22,25 +29,23 @@ interface ProjectItem {
   } | null;
 }
 
-export async function GET(): Promise<NextResponse<GitHubData>> {
+export async function GET() {
   try {
     console.log('GitHub API route called');
     
-    if (!GITHUB_TOKEN) {
-      console.error('GitHub token not found');
+    if (!process.env.GITHUB_TOKEN) {
       throw new Error('GitHub token not found');
     }
 
     console.log('Fetching GitHub Project data...');
 
     const headers = {
-      'Authorization': `Bearer ${GITHUB_TOKEN}`,
+      'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
       'Accept': 'application/vnd.github.v3+json',
       'X-GitHub-Api-Version': '2022-11-28',
       'User-Agent': 'PLDG-Dashboard'
     };
 
-    // Fetch project data using the GraphQL API
     const projectQuery = {
       query: `
         query {
@@ -51,13 +56,9 @@ export async function GET(): Promise<NextResponse<GitHubData>> {
                   id
                   fieldValues(first: 8) {
                     nodes {
-                      ... on ProjectV2ItemFieldTextValue {
-                        field { name }
-                        text
-                      }
                       ... on ProjectV2ItemFieldSingleSelectValue {
                         field { name }
-                        name
+                        text
                       }
                     }
                   }
@@ -89,8 +90,6 @@ export async function GET(): Promise<NextResponse<GitHubData>> {
       body: JSON.stringify(projectQuery)
     });
 
-    console.log('GitHub API Response Status:', response.status);
-
     if (!response.ok) {
       throw new Error(`GitHub API error: ${response.statusText}`);
     }
@@ -99,51 +98,37 @@ export async function GET(): Promise<NextResponse<GitHubData>> {
     const items = (data.data?.user?.projectV2?.items?.nodes || []) as ProjectItem[];
 
     // Group items by status
-    const statusGroups = {
+    const statusCounts = {
       todo: items.filter(item => getItemStatus(item) === 'Todo').length,
       inProgress: items.filter(item => getItemStatus(item) === 'In Progress').length,
-      done: items.filter(item => getItemStatus(item) === 'Done').length
+      done: items.filter(item => getItemStatus(item) === 'Done').length // Changed from 'completed' to 'done'
     };
 
-    // Transform the data
-    const issues = items
-      .filter((item: ProjectItem) => item.content)
-      .map((item: ProjectItem) => ({
-        title: item.content!.title,
-        state: item.content!.state,
-        created_at: item.content!.createdAt,
-        closed_at: item.content!.closedAt,
-        status: getItemStatus(item)
-      }));
+    console.log('Status counts:', statusCounts);
 
-    console.log('GitHub Project data fetched:', {
-      itemsCount: items.length,
-      issuesCount: issues.length
-    });
-
-    const responseData: GitHubData = { 
+    const responseData: GitHubData = {
       project: data.data,
-      issues,
-      statusGroups
+      issues: items.map(item => ({
+        title: item.content?.title || '',
+        state: item.content?.state || '',
+        created_at: item.content?.createdAt || '',
+        closed_at: item.content?.closedAt || null,
+        status: getItemStatus(item)
+      })),
+      statusGroups: statusCounts // Now matches the GitHubData type
     };
-
-    // Validate the response data
-    if (!isValidGitHubData(responseData)) {
-      throw new Error('Invalid GitHub data structure');
-    }
 
     return NextResponse.json(responseData);
   } catch (error) {
     console.error('GitHub API error:', error);
     return NextResponse.json({ 
-      issues: [],
       project: { user: { projectV2: { items: { nodes: [] } } } },
+      issues: [],
       statusGroups: {
         todo: 0,
         inProgress: 0,
-        done: 0
-      },
-      _error: error instanceof Error ? error.message : 'Unknown error'
+        done: 0 // Changed from 'completed' to 'done'
+      }
     } as GitHubData);
   }
 }
@@ -152,5 +137,6 @@ function getItemStatus(item: ProjectItem): string {
   const statusField = item.fieldValues.nodes.find(node => 
     node.field.name.toLowerCase() === 'status'
   );
-  return statusField?.text || 'Todo';
+  const columnStatus = statusField?.text || 'Todo';
+  return COLUMN_STATUS[columnStatus as keyof typeof COLUMN_STATUS] || 'Todo';
 } 

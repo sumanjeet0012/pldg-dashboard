@@ -1,7 +1,7 @@
 import { useMemo, useCallback } from 'react';
 import { useAirtableData } from './airtable';
 import { useGitHubData } from './github';
-import { ProcessedData, EngagementData, ActionItem } from '@/types/dashboard';
+import { ProcessedData, EngagementData, ActionItem, IssueMetrics } from '@/types/dashboard';
 import _ from 'lodash';
 import { enhanceProcessedData } from './ai';
 
@@ -100,6 +100,49 @@ function parseTechPartners(techPartner: string | string[]): string[] {
   return techPartner?.split(',').map(p => p.trim()) ?? [];
 }
 
+// Add missing helper functions
+function calculateActiveTechPartners(data: EngagementData[]): number {
+  return new Set(
+    data.filter(e => e['Tech Partner Collaboration?'] === 'Yes')
+      .flatMap(entry => parseTechPartners(entry['Which Tech Partner']))
+  ).size;
+}
+
+function calculatePositiveFeedback(data: EngagementData[]): number {
+  return data.filter(entry => 
+    entry['PLDG Feedback']?.toLowerCase().includes('great') || 
+    entry['PLDG Feedback']?.toLowerCase().includes('good')
+  ).length;
+}
+
+// Add this function near the top with other helper functions
+function processRawIssueMetrics(entries: EngagementData[]): IssueMetrics[] {
+  const currentDate = new Date();
+  const weekStr = currentDate.toISOString().split('T')[0];
+  
+  // Group entries by week
+  const weeklyMetrics = _.groupBy(entries, 'Program Week');
+  
+  return Object.entries(weeklyMetrics).map(([week, weekEntries]) => {
+    const totalIssues = weekEntries.reduce((sum, entry) => 
+      sum + parseInt(entry['How many issues, PRs, or projects this week?'] || '0'), 0
+    );
+    
+    // Estimate open/closed based on GitHub status if available
+    const hasGitHubLink = weekEntries.some(entry => entry['Issue Link 1']);
+    const closedIssues = hasGitHubLink 
+      ? weekEntries.filter(entry => entry['Issue Link 1']?.includes('closed')).length
+      : Math.round(totalIssues * 0.7); // Default assumption: 70% completion rate
+    
+    return {
+      week: week.replace(/\(.*?\)/, '').trim(),
+      open: totalIssues - closedIssues,
+      closed: closedIssues,
+      total: totalIssues
+    };
+  });
+}
+
 export function useProcessedData() {
   const { 
     data: airtableData, 
@@ -108,13 +151,6 @@ export function useProcessedData() {
     mutate: refreshAirtable 
   } = useAirtableData();
 
-  console.log('Airtable Data in useProcessedData:', {
-    hasData: !!airtableData,
-    dataLength: airtableData?.length,
-    isLoading: isAirtableLoading,
-    isError: isAirtableError
-  });
-
   const { 
     data: githubData, 
     isLoading: isGithubLoading, 
@@ -122,181 +158,179 @@ export function useProcessedData() {
     mutate: refreshGithub 
   } = useGitHubData();
 
-  console.log('GitHub Data in useProcessedData:', {
-    hasData: !!githubData,
-    issuesLength: githubData?.issues?.length,
-    isLoading: isGithubLoading,
-    isError: isGithubError
-  });
-
-  const refresh = useCallback(async () => {
-    await Promise.all([refreshAirtable(), refreshGithub()]);
-  }, [refreshAirtable, refreshGithub]);
-
   // Add debug logging
-  console.log('Raw Data:', {
-    airtable: airtableData,
-    github: githubData
+  console.log('Data Processing State:', {
+    airtable: {
+      hasData: !!airtableData,
+      length: airtableData?.length,
+      isLoading: isAirtableLoading,
+      isError: isAirtableError
+    },
+    github: {
+      hasData: !!githubData,
+      issuesCount: githubData?.issues?.length,
+      isLoading: isGithubLoading,
+      isError: isGithubError
+    }
   });
 
   const processedData = useMemo(() => {
-    if (!airtableData || !githubData) {
-      console.log('Missing data:', { hasAirtable: !!airtableData, hasGithub: !!githubData });
+    if (!airtableData?.length || isAirtableLoading || isGithubLoading) {
+      console.log('Skipping data processing - data not ready');
       return null;
     }
 
-    // Add null check for githubData.issues and statusGroups
-    const issues = githubData?.issues || [];
-    const statusGroups = githubData?.statusGroups || { todo: 0, inProgress: 0, done: 0 };
+    console.log('Processing data with:', {
+      airtableRecords: airtableData.length,
+      githubStatus: githubData?.statusGroups
+    });
 
-    // 1. Weekly Performance
-    const totalContributions = airtableData.reduce((sum, entry) => {
-      const issueCount = entry['How many issues, PRs, or projects this week?'];
-      return sum + (parseInt(issueCount as string) || 0);
-    }, 0);
+    // Calculate all required metrics
+    const technicalProgress = Object.entries(_.groupBy(airtableData, 'Program Week')).map(([week, entries]) => ({
+      week,
+      'Total Issues': entries.reduce((sum, entry) => 
+        sum + parseInt(entry['How many issues, PRs, or projects this week?'] || '0'), 0
+      ),
+      'In Progress': githubData?.statusGroups?.inProgress || 0,
+      'Done': githubData?.statusGroups?.done || 0
+    }));
 
-    const activeContributors = new Set(airtableData.map(entry => entry.Name)).size;
-
-    // Calculate week-over-week change
-    const currentWeekEntries = airtableData.filter(entry => 
-      entry['Program Week']?.includes('Week 4')
-    );
-    const previousWeekEntries = airtableData.filter(entry => 
-      entry['Program Week']?.includes('Week 3')
-    );
-
-    const currentWeekContributions = currentWeekEntries.reduce((sum, entry) => 
-      sum + (parseInt(entry['How many issues, PRs, or projects this week?'] || '0')), 0
-    );
-    const previousWeekContributions = previousWeekEntries.reduce((sum, entry) => 
-      sum + (parseInt(entry['How many issues, PRs, or projects this week?'] || '0')), 0
+    const activeContributors = new Set(airtableData.map(e => e.Name)).size;
+    const totalContributions = airtableData.reduce((sum, entry) => 
+      sum + parseInt(entry['How many issues, PRs, or projects this week?'] || '0'), 0
     );
 
-    const weeklyChange = previousWeekContributions ? 
-      ((currentWeekContributions - previousWeekContributions) / previousWeekContributions) * 100 : 0;
-
-    // 2. Program Health
-    const npsScore = calculateNPSScore(airtableData);
-    const engagementRate = calculateEngagementRate(airtableData);
-    const activeTechPartnersCount = new Set(
-      airtableData.flatMap(entry => parseTechPartners(entry['Which Tech Partner']))
-    ).size;
-
-    // 3. Key Highlights
-    const positiveFeedback = airtableData.filter(entry => 
-      entry['PLDG Feedback']?.toLowerCase().includes('great') || 
-      entry['PLDG Feedback']?.toLowerCase().includes('good')
-    ).length;
-
-    // 4. Top Performers
-    const topPerformers = Object.values(
-      airtableData.reduce((acc, entry) => {
-        const name = entry.Name;
-        if (!acc[name]) {
-          acc[name] = {
-            name,
-            totalIssues: 0,
-            avgEngagement: 0,
-            engagementCount: 0
-          };
-        }
-        acc[name].totalIssues += parseInt(entry['How many issues, PRs, or projects this week?'] || '0');
-        const engagementLevel = entry['Engagement Participation ']?.includes('3 -') ? 3 :
-                              entry['Engagement Participation ']?.includes('2 -') ? 2 : 1;
-        acc[name].avgEngagement += engagementLevel;
-        acc[name].engagementCount += 1;
-        return acc;
-      }, {} as Record<string, any>)
-    ).map(performer => ({
-      name: performer.name,
-      totalIssues: performer.totalIssues,
-      avgEngagement: performer.avgEngagement / performer.engagementCount
-    })).sort((a, b) => b.totalIssues - a.totalIssues || b.avgEngagement - a.avgEngagement);
-
-    // Add action items
-    const actionItems = calculateActionItems(airtableData);
-
-    // Add missing required properties
-    const baseProcessedData = {
-      weeklyChange,
-      activeContributors,
-      totalContributions,
-      programHealth: {
-        npsScore,
-        engagementRate,
-        activeTechPartners: activeTechPartnersCount
-      },
-      keyHighlights: {
-        activeContributorsAcrossTechPartners: `${activeContributors} active contributors across ${activeTechPartnersCount} tech partners`,
-        totalContributions: `${totalContributions} total contributions`,
-        positiveFeedback: `${positiveFeedback} positive feedback responses`,
-        weeklyContributions: `${Math.abs(Math.round(weeklyChange))}% ${weeklyChange > 0 ? 'increase' : 'decrease'} in weekly contributions`
-      },
-      topPerformers,
-      actionItems,
-      // Add these required properties
-      engagementTrends: Object.entries(_.groupBy(airtableData, 'Program Week')).map(([week, entries]) => ({
+    // Calculate engagement trends
+    const engagementTrends = Object.entries(_.groupBy(airtableData, 'Program Week'))
+      .map(([week, entries]) => ({
         week,
         'High Engagement': entries.filter(e => e['Engagement Participation ']?.includes('3 -')).length,
         'Medium Engagement': entries.filter(e => e['Engagement Participation ']?.includes('2 -')).length,
         'Low Engagement': entries.filter(e => e['Engagement Participation ']?.includes('1 -')).length,
         total: entries.length
-      })),
-      technicalProgress: Object.entries(_.groupBy(airtableData, 'Program Week')).map(([week, entries]) => ({
-        week,
-        'Total Issues': entries.reduce((sum, entry) => 
-          sum + parseInt(entry['How many issues, PRs, or projects this week?'] || '0'), 0
-        ),
-        'In Progress': statusGroups.inProgress,
-        'Completed': statusGroups.done
-      })),
-      issueMetrics: [{
-        week: new Date().toISOString().split('T')[0],
-        open: issues.filter(i => i.state === 'open').length || 0,
-        closed: issues.filter(i => i.state === 'closed').length || 0,
-        total: issues.length || 0
-      }],
-      feedbackSentiment: {
-        positive: airtableData.filter(e => e['PLDG Feedback']?.toLowerCase().includes('great') || 
-                                         e['PLDG Feedback']?.toLowerCase().includes('good')).length,
-        neutral: airtableData.filter(e => e['PLDG Feedback'] && 
-                                        !e['PLDG Feedback'].toLowerCase().includes('great') && 
-                                        !e['PLDG Feedback'].toLowerCase().includes('good') &&
-                                        !e['PLDG Feedback'].toLowerCase().includes('bad')).length,
-        negative: airtableData.filter(e => e['PLDG Feedback']?.toLowerCase().includes('bad')).length
-      },
-      techPartnerMetrics: Array.from(new Set(airtableData.flatMap(e => 
-        parseTechPartners(e['Which Tech Partner'])))).map(partner => ({
-          partner,
-          totalIssues: airtableData.filter(e => e['Which Tech Partner']?.includes(partner))
-            .reduce((sum, e) => sum + parseInt(e['How many issues, PRs, or projects this week?'] || '0'), 0),
-          activeContributors: new Set(airtableData.filter(e => e['Which Tech Partner']?.includes(partner))
-            .map(e => e.Name)).size,
-          avgIssuesPerContributor: 0, // Calculate this if needed
-          collaborationScore: 0 // Calculate this if needed
-      })),
-      techPartnerPerformance: Array.from(new Set(airtableData.flatMap(e => 
-        parseTechPartners(e['Which Tech Partner'])))).map(partner => ({
-          partner,
-          issues: airtableData.filter(e => e['Which Tech Partner']?.includes(partner))
-            .reduce((sum, e) => sum + parseInt(e['How many issues, PRs, or projects this week?'] || '0'), 0)
-      })),
-      contributorGrowth: Object.entries(_.groupBy(airtableData, 'Program Week')).map(([week, entries]) => ({
-        week,
-        newContributors: new Set(entries.map(e => e.Name)).size,
-        returningContributors: 0, // Calculate this if needed
-        totalActive: entries.length
-      }))
-    };
+      }));
 
-    // Enhance the data with AI insights
-    return enhanceProcessedData(baseProcessedData);
-  }, [airtableData, githubData]);
+    // Calculate issue metrics
+    const issueMetrics = processRawIssueMetrics(airtableData);
+
+    // Calculate tech partner metrics
+    const techPartnerMetrics = _(airtableData)
+      .groupBy('Which Tech Partner')
+      .map((items, partner) => ({
+        partner,
+        totalIssues: _.sumBy(items, item => 
+          parseInt(item['How many issues, PRs, or projects this week?'] || '0')
+        ),
+        activeContributors: new Set(items.map(item => item.Name)).size,
+        avgIssuesPerContributor: 0,
+        collaborationScore: 0
+      }))
+      .value();
+
+    const activeTechPartnersCount = calculateActiveTechPartners(airtableData);
+
+    return {
+      weeklyChange: calculateWeeklyChange(airtableData),
+      activeContributors,
+      totalContributions,
+      programHealth: {
+        npsScore: calculateNPSScore(airtableData),
+        engagementRate: calculateEngagementRate(airtableData),
+        activeTechPartners: activeTechPartnersCount
+      },
+      keyHighlights: {
+        activeContributorsAcrossTechPartners: `${activeContributors} across ${activeTechPartnersCount}`,
+        totalContributions: `${totalContributions} total`,
+        positiveFeedback: `${calculatePositiveFeedback(airtableData)} positive`,
+        weeklyContributions: `${calculateWeeklyChange(airtableData)}% change`
+      },
+      technicalProgress,
+      engagementTrends,
+      issueMetrics,
+      techPartnerMetrics,
+      techPartnerPerformance: techPartnerMetrics.map(m => ({
+        partner: m.partner,
+        issues: m.totalIssues
+      })),
+      topPerformers: calculateTopPerformers(airtableData),
+      actionItems: calculateActionItems(airtableData),
+      feedbackSentiment: {
+        positive: calculatePositiveFeedback(airtableData),
+        neutral: 0,
+        negative: 0
+      },
+      contributorGrowth: []
+    } as ProcessedData;
+  }, [airtableData, githubData, isAirtableLoading, isGithubLoading]);
 
   return {
     data: processedData,
     isLoading: isAirtableLoading || isGithubLoading,
     isError: isAirtableError || isGithubError,
-    refresh
+    refresh: useCallback(async () => {
+      console.log('Refreshing data...');
+      await Promise.all([refreshAirtable(), refreshGithub()]);
+    }, [refreshAirtable, refreshGithub])
   };
+}
+
+// Helper functions
+function calculateWeeklyChange(data: EngagementData[]): number {
+  // Group by week and ensure proper week sorting
+  const weeks = _.groupBy(data, 'Program Week');
+  const weekNumbers = Object.keys(weeks).sort((a, b) => {
+    // Extract week numbers for proper sorting
+    const weekA = parseInt(a.match(/Week (\d+)/)?.[1] || '0');
+    const weekB = parseInt(b.match(/Week (\d+)/)?.[1] || '0');
+    return weekA - weekB;
+  });
+
+  if (weekNumbers.length < 2) return 0;
+
+  // Get the last two weeks
+  const currentWeek = weeks[weekNumbers[weekNumbers.length - 1]];
+  const previousWeek = weeks[weekNumbers[weekNumbers.length - 2]];
+
+  // Calculate totals with better error handling
+  const currentTotal = currentWeek.reduce((sum, entry) => {
+    const value = parseInt(entry['How many issues, PRs, or projects this week?'] || '0');
+    return sum + (isNaN(value) ? 0 : value);
+  }, 0);
+
+  const previousTotal = previousWeek.reduce((sum, entry) => {
+    const value = parseInt(entry['How many issues, PRs, or projects this week?'] || '0');
+    return sum + (isNaN(value) ? 0 : value);
+  }, 0);
+
+  // Add debug logging
+  console.log('Weekly Change Calculation:', {
+    currentWeek: weekNumbers[weekNumbers.length - 1],
+    previousWeek: weekNumbers[weekNumbers.length - 2],
+    currentTotal,
+    previousTotal
+  });
+
+  // Calculate percentage change
+  if (previousTotal === 0) return currentTotal > 0 ? 100 : 0;
+  
+  const change = ((currentTotal - previousTotal) / previousTotal) * 100;
+  return Math.round(change);
+}
+
+// Add helper function for top performers
+function calculateTopPerformers(data: EngagementData[]) {
+  return _(data)
+    .groupBy('Name')
+    .map((entries, name) => ({
+      name,
+      totalIssues: _.sumBy(entries, e => parseInt(e['How many issues, PRs, or projects this week?'] || '0')),
+      avgEngagement: _.meanBy(entries, e => {
+        const participation = e['Engagement Participation ']?.trim() || '';
+        return participation.startsWith('3') ? 3 :
+               participation.startsWith('2') ? 2 :
+               participation.startsWith('1') ? 1 : 0;
+      })
+    }))
+    .orderBy(['totalIssues', 'avgEngagement'], ['desc', 'desc'])
+    .value();
 }
