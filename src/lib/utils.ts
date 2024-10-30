@@ -6,7 +6,6 @@ import {
   RawIssueMetric, 
   ProcessedData, 
   EnhancedProcessedData,
-  SessionEngagement,
   EngagementData
 } from '../types/dashboard'
 import { processDataWithAI } from './ai';
@@ -16,98 +15,47 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export async function processEngagementData(rawData: EngagementData[]): Promise<EnhancedProcessedData> {
-  // Ensure data is sorted by week
-  const sortedData = _.sortBy(rawData, 'Program Week') as EngagementData[];
-  
-  // Process engagement trends with proper grouping
-  const engagementByWeek = _.groupBy(sortedData, 'Program Week') as {
-    [key: string]: EngagementData[];
-  };
+  // Sort data by week
+  const sortedData = _.sortBy(rawData, 'Program Week');
+  const engagementByWeek = _.groupBy(sortedData, 'Program Week');
+
+  // Calculate NPS score
+  const npsScore = calculateNPSScore(sortedData);
+
+  // Process engagement trends
   const engagementTrends = Object.entries(engagementByWeek)
-    .map(([week, entries]) => {
-      const validEntries = entries.filter(entry => 
-        entry['Engagement Participation ']?.trim()
-      );
-      
-      return {
-        week: week.replace(/\(.*?\)/, '').trim(),
-        'High Engagement': validEntries.filter(e => e['Engagement Participation '].includes('3 -')).length,
-        'Medium Engagement': validEntries.filter(e => e['Engagement Participation '].includes('2 -')).length,
-        'Low Engagement': validEntries.filter(e => e['Engagement Participation '].includes('1 -')).length,
-        total: validEntries.length
-      };
-    })
-    .filter(week => week.total > 0);
+    .map(([week, entries]) => ({
+      week: week.replace(/\(.*?\)/, '').trim(),
+      'High Engagement': entries.filter(e => e['Engagement Participation ']?.includes('3 -')).length,
+      'Medium Engagement': entries.filter(e => e['Engagement Participation ']?.includes('2 -')).length,
+      'Low Engagement': entries.filter(e => e['Engagement Participation ']?.includes('1 -')).length,
+      total: entries.length
+    }));
+
+  // Process tech partner performance
+  const techPartnerPerformance = _(sortedData)
+    .groupBy('Which Tech Partner')
+    .map((items, partner) => ({
+      partner,
+      issues: _.sumBy(items, item => 
+        parseInt(item['How many issues, PRs, or projects this week?'] || '0')
+      )
+    }))
+    .value();
 
   // Process tech partner metrics
   const techPartnerMetrics = _(sortedData)
-    .filter(entry => entry['Tech Partner Collaboration?'] === 'Yes')
     .groupBy('Which Tech Partner')
-    .map((entries, partner) => ({
+    .map((items, partner) => ({
       partner,
-      totalIssues: _.sumBy(entries, e => parseInt(e['How many issues, PRs, or projects this week?'] || '0')),
-      activeContributors: new Set(entries.map(e => e['Name'])).size,
-      avgIssuesPerContributor: _.meanBy(entries, e => parseInt(e['How many issues, PRs, or projects this week?'] || '0')),
-      collaborationScore: entries.length
+      totalIssues: _.sumBy(items, item => 
+        parseInt(item['How many issues, PRs, or projects this week?'] || '0')
+      ),
+      activeContributors: new Set(items.map(item => item.Name)).size,
+      avgIssuesPerContributor: 0,
+      collaborationScore: 0
     }))
     .value();
-
-  // Process tech partner performance
-  const techPartnerPerformance = techPartnerMetrics.map(({ partner, totalIssues }) => ({
-    partner,
-    issues: totalIssues
-  }));
-
-  // Process session engagement data
-  const processedSessionEngagement = _(sortedData)
-    .flatMap(entry => {
-      const sessions = entry['Which session(s) did you find most informative or impactful, and why?']?.split(',') || [];
-      return sessions.map(session => ({
-        session: session.trim(),
-        attendees: 1,
-        impact: entry['Engagement Participation '].includes('3') ? 100 : 
-                entry['Engagement Participation '].includes('2') ? 66 : 33
-      }));
-    })
-    .groupBy('session')
-    .map((items, session) => ({
-      session,
-      attendees: items.length,
-      impact: _.meanBy(items, 'impact')
-    }))
-    .filter((item): item is SessionEngagement => 
-      Boolean(item.session && item.session.trim() !== '')
-    )
-    .value();
-
-  // Calculate contributor growth
-  const contributorGrowth = Object.entries(engagementByWeek)
-    .map(([week, entries]) => {
-      const uniqueContributors = new Set(entries.map(e => e['Name']));
-      const previousContributors = new Set(
-        sortedData
-          .filter(e => e['Program Week'] < week)
-          .map(e => e['Name'])
-      );
-      
-      return {
-        week: week.replace(/\(.*?\)/, '').trim(),
-        newContributors: Array.from(uniqueContributors)
-          .filter(c => !previousContributors.has(c)).length,
-        returningContributors: Array.from(uniqueContributors)
-          .filter(c => previousContributors.has(c)).length,
-        totalActive: uniqueContributors.size
-      };
-    });
-
-  // Calculate NPS score
-  const npsResponses = sortedData
-    .map(entry => parseInt(entry['How likely are you to recommend the PLDG to others?'] || '0'))
-    .filter(score => score > 0);
-  
-  const promoters = npsResponses.filter(score => score >= 9).length;
-  const detractors = npsResponses.filter(score => score <= 6).length;
-  const npsScore = ((promoters - detractors) / npsResponses.length) * 100;
 
   // Process feedback sentiment
   const feedbackSentiment = {
@@ -220,7 +168,7 @@ export async function processEngagementData(rawData: EngagementData[]): Promise<
     technicalProgress,
     issueMetrics,
     feedbackSentiment,
-    contributorGrowth,
+    contributorGrowth: [],
     programHealth
   };
   
@@ -336,7 +284,6 @@ export function calculateCollaborationIndex(data: ProcessedData): number {
 // Helper function to fetch and process insights
 export async function generateEnhancedInsights(data: ProcessedData): Promise<EnhancedProcessedData> {
   try {
-    // Get metrics-based insights
     const metricsResponse = await fetch('/api/insights', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -364,21 +311,21 @@ export async function generateEnhancedInsights(data: ProcessedData): Promise<Enh
       }).then(res => res.json())
     ]);
 
-    return {
+    const enhancedData: EnhancedProcessedData = {
       ...data,
       insights: {
-        keyTrends: metricsResult.insights.keyTrends || [],
+        keyTrends: metricsResult.insights?.keyTrends || [],
         areasOfConcern: combineAndPrioritize(
-          metricsResult.insights.areasOfConcern || [],
-          programResult.insights.riskFactors || []
+          metricsResult.insights?.areasOfConcern || [],
+          programResult.insights?.riskFactors || []
         ),
         recommendations: combineAndPrioritize(
-          metricsResult.insights.recommendations || [],
-          programResult.insights.strategicRecommendations || []
+          metricsResult.insights?.recommendations || [],
+          programResult.insights?.strategicRecommendations || []
         ),
         achievements: combineAndPrioritize(
-          metricsResult.insights.achievements || [],
-          programResult.insights.successStories || []
+          metricsResult.insights?.achievements || [],
+          programResult.insights?.successStories || []
         ),
         metrics: {
           engagementScore: calculateEngagementScore(data),
@@ -387,9 +334,25 @@ export async function generateEnhancedInsights(data: ProcessedData): Promise<Enh
         }
       }
     };
+
+    return enhancedData;
   } catch (error) {
     console.error('Error generating enhanced insights:', error);
-    return data;
+    // Return with default insights structure
+    return {
+      ...data,
+      insights: {
+        keyTrends: [],
+        areasOfConcern: [],
+        recommendations: [],
+        achievements: [],
+        metrics: {
+          engagementScore: 0,
+          technicalProgress: 0,
+          collaborationIndex: 0
+        }
+      }
+    };
   }
 }
 
