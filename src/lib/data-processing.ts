@@ -143,6 +143,94 @@ function processRawIssueMetrics(entries: EngagementData[]): IssueMetrics[] {
   });
 }
 
+// Export the processData function
+export function processData(rawData: EngagementData[]): ProcessedData {
+  // Group by week and ensure proper week sorting
+  const weeks = _.groupBy(rawData, 'Program Week');
+  const weekNumbers = Object.keys(weeks).sort((a, b) => {
+    const weekA = parseInt(a.match(/Week (\d+)/)?.[1] || '0');
+    const weekB = parseInt(b.match(/Week (\d+)/)?.[1] || '0');
+    return weekA - weekB;
+  });
+
+  // Calculate all metrics
+  const processedData: ProcessedData = {
+    weeklyChange: calculateWeeklyChange(rawData),
+    activeContributors: new Set(rawData.map(e => e.Name)).size,
+    totalContributions: rawData.reduce((sum, entry) => 
+      sum + parseInt(entry['How many issues, PRs, or projects this week?'] || '0'), 0
+    ),
+    programHealth: {
+      npsScore: calculateNPSScore(rawData),
+      engagementRate: calculateEngagementRate(rawData),
+      activeTechPartners: calculateActiveTechPartners(rawData)
+    },
+    keyHighlights: {
+      activeContributorsAcrossTechPartners: `${new Set(rawData.map(e => e.Name)).size} across ${calculateActiveTechPartners(rawData)}`,
+      totalContributions: `${rawData.reduce((sum, entry) => sum + parseInt(entry['How many issues, PRs, or projects this week?'] || '0'), 0)} total`,
+      positiveFeedback: `${calculatePositiveFeedback(rawData)} positive`,
+      weeklyContributions: `${calculateWeeklyChange(rawData)}% change`
+    },
+    technicalProgress: Object.entries(weeks).map(([week, entries]) => ({
+      week,
+      'Total Issues': entries.reduce((sum, entry) => 
+        sum + parseInt(entry['How many issues, PRs, or projects this week?'] || '0'), 0
+      ),
+      'In Progress': 0,
+      'Done': 0
+    })),
+    engagementTrends: Object.entries(weeks).map(([week, entries]) => ({
+      week,
+      'High Engagement': entries.filter(e => e['Engagement Participation ']?.includes('3 -')).length,
+      'Medium Engagement': entries.filter(e => e['Engagement Participation ']?.includes('2 -')).length,
+      'Low Engagement': entries.filter(e => e['Engagement Participation ']?.includes('1 -')).length,
+      total: entries.length
+    })),
+    techPartnerPerformance: calculateTechPartnerPerformance(rawData),
+    techPartnerMetrics: calculateTechPartnerMetrics(rawData),
+    topPerformers: calculateTopPerformers(rawData),
+    issueMetrics: processRawIssueMetrics(rawData),
+    feedbackSentiment: {
+      positive: calculatePositiveFeedback(rawData),
+      neutral: 0,
+      negative: 0
+    },
+    contributorGrowth: [],
+    actionItems: calculateActionItems(rawData)
+  };
+
+  return processedData;
+}
+
+// Add helper function for tech partner performance
+function calculateTechPartnerPerformance(data: EngagementData[]) {
+  return _(data)
+    .groupBy('Which Tech Partner')
+    .map((items, partner) => ({
+      partner,
+      issues: _.sumBy(items, item => 
+        parseInt(item['How many issues, PRs, or projects this week?'] || '0')
+      )
+    }))
+    .value();
+}
+
+// Add helper function for tech partner metrics
+function calculateTechPartnerMetrics(data: EngagementData[]) {
+  return _(data)
+    .groupBy('Which Tech Partner')
+    .map((items, partner) => ({
+      partner,
+      totalIssues: _.sumBy(items, item => 
+        parseInt(item['How many issues, PRs, or projects this week?'] || '0')
+      ),
+      activeContributors: new Set(items.map(item => item.Name)).size,
+      avgIssuesPerContributor: 0,
+      collaborationScore: 0
+    }))
+    .value();
+}
+
 export function useProcessedData() {
   const { 
     data: airtableData, 
