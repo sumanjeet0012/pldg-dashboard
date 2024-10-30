@@ -1,14 +1,7 @@
 import { ProcessedData } from "@/types/dashboard";
 import { KPICard } from "./KPICard";
 
-interface ExtendedProcessedData extends ProcessedData {
-  programHealth: {
-    engagementRate: number;
-    nps: number;
-  };
-}
-
-export function PerformanceIndicators({ data }: { data: ExtendedProcessedData }) {
+export function PerformanceIndicators({ data }: { data: ProcessedData }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
       <KPICard
@@ -20,21 +13,22 @@ export function PerformanceIndicators({ data }: { data: ExtendedProcessedData })
       />
       <KPICard
         title="NPS Score"
-        value={data.programHealth.nps}
+        value={data.programHealth.npsScore}
         trend={-2}
         status="neutral"
         description="Net Promoter Score"
       />
       <KPICard
-        title="Retention Rate"
-        value="92%"
+        title="Active Tech Partners"
+        value={data.programHealth.activeTechPartners}
         trend={+3}
         status="positive"
-        description="30-day contributor retention"
+        description="Current collaborating partners"
       />
       <KPICard
         title="Project Completion"
-        value="87%"
+        value={`${Math.round((data.issueMetrics[data.issueMetrics.length - 1]?.closed || 0) / 
+          (data.issueMetrics[data.issueMetrics.length - 1]?.total || 1) * 100)}%`}
         trend={+12}
         status="positive"
         description="On-time delivery rate"
