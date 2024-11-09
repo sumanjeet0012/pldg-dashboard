@@ -1,109 +1,70 @@
-import useSWR from 'swr';
 import { GitHubData } from '@/types/dashboard';
-import _ from 'lodash';
+import useSWR from 'swr';
 
-const REFRESH_INTERVAL = 60000; // 1 minute
-
-async function fetchGitHubData(): Promise<GitHubData> {
-  const response = await fetch('/api/github');
+const fetcher = async (): Promise<GitHubData> => {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+  const response = await fetch(`${baseUrl}/api/github`);
   if (!response.ok) {
     throw new Error('Failed to fetch GitHub data');
   }
-  return response.json();
-}
+  const rawData = await response.json();
+  
+  console.log('GitHub raw data:', {
+    hasData: !!rawData,
+    statusGroups: rawData?.statusGroups,
+    timestamp: new Date().toISOString()
+  });
 
-export function useGitHubData() {
-  const { data, error, mutate } = useSWR<GitHubData>(
-    '/api/github',
-    async () => {
-      try {
-        const response = await fetch('/api/github');
-        
-        if (!response.ok) {
-          throw new Error(`GitHub API error: ${response.statusText}`);
+  return {
+    issues: rawData.issues || [],
+    statusGroups: {
+      inProgress: rawData.statusGroups?.inProgress || 0,
+      done: rawData.statusGroups?.done || 0,
+      todo: rawData.statusGroups?.todo || 0
+    },
+    project: {
+      user: {
+        projectV2: {
+          items: {
+            nodes: rawData.project?.user?.projectV2?.items?.nodes || []
+          }
         }
-        
-        const data = await response.json();
-        
-        return {
-          project: {
-            user: {
-              projectV2: {
-                items: { nodes: [] }
-              }
-            }
-          },
-          issues: data.issues || [],
-          statusGroups: data.statusGroups || {
-            todo: 0,
-            inProgress: 0,
-            done: 0
-          }
-        } as GitHubData;
-      } catch (error) {
-        console.error('Error fetching GitHub data:', error);
-        return {
-          project: {
-            user: {
-              projectV2: {
-                items: { nodes: [] }
-              }
-            }
-          },
-          issues: [],
-          statusGroups: {
-            todo: 0,
-            inProgress: 0,
-            done: 0
-          }
-        };
       }
     },
+    projectBoard: {
+      issues: rawData.projectBoard?.issues || [],
+      statusGroups: {
+        todo: rawData.projectBoard?.statusGroups?.todo || 0,
+        inProgress: rawData.projectBoard?.statusGroups?.inProgress || 0,
+        done: rawData.projectBoard?.statusGroups?.done || 0
+      },
+      project: rawData.projectBoard?.project || {}
+    },
+    userContributions: rawData.userContributions || {},
+    timestamp: Date.now()
+  };
+};
+
+export function useGitHubData() {
+  const { data, error, isValidating, mutate } = useSWR<GitHubData>(
+    '/api/github',
+    fetcher,
     {
-      refreshInterval: REFRESH_INTERVAL,
-      revalidateOnFocus: true,
-      dedupingInterval: 10000
+      refreshInterval: 5 * 60 * 1000,
+      revalidateOnFocus: false,
+      dedupingInterval: 10000,
+      onErrorRetry: (error, key, config, revalidate, { retryCount }) => {
+        if (retryCount >= 3) return;
+        setTimeout(() => revalidate({ retryCount }), 5000);
+      }
     }
   );
 
-  const processedData = {
-    data: data || { 
-      project: { user: { projectV2: { items: { nodes: [] } } } }, 
-      issues: [] 
-    },
-    isLoading: !error && !data,
-    isError: error,
-    mutate
-  };
-
-  console.log('GitHub hook state:', {
-    hasData: !!data,
-    isLoading: processedData.isLoading,
+  return {
+    data,
+    isLoading: !error && !data && isValidating,
     isError: !!error,
-    issuesCount: processedData.data.issues.length
-  });
-
-  return processedData;
+    mutate,
+    timestamp: data?.timestamp
+  };
 }
-
-export { fetchGitHubData };
-
-export function processGitHubData(data: GitHubData) {
-  const weeklyData = _.groupBy(data.issues, issue => {
-    const date = new Date(issue.created_at);
-    return `Week ${getWeekNumber(date)}`;
-  });
-
-  return Object.entries(weeklyData).map(([week, issues]) => ({
-    week,
-    newIssues: issues.length,
-    inProgress: issues.filter(issue => issue.status === 'In Progress').length,
-    completed: issues.filter(issue => issue.status === 'Done').length
-  }));
-}
-
-function getWeekNumber(date: Date): number {
-  const startOfYear = new Date(date.getFullYear(), 0, 1);
-  const days = Math.floor((date.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000));
-  return Math.ceil((days + startOfYear.getDay() + 1) / 7);
-} 

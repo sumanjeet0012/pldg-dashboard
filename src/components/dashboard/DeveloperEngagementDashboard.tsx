@@ -1,86 +1,112 @@
 'use client';
 
 import * as React from 'react';
-import { Suspense } from 'react';
-import { useDashboardSystem } from '@/context/DashboardSystemContext';
+import { useDashboardSystemContext } from '@/context/DashboardSystemContext';
 import ExecutiveSummary from './ExecutiveSummary';
 import { ActionableInsights } from './ActionableInsights';
 import EngagementChart from './EngagementChart';
 import TechnicalProgressChart from './TechnicalProgressChart';
-import { LoadingCard } from '@/components/ui/loading-card';
-import { LastUpdated } from './LastUpdated';
-import TopPerformersTable from './TopPerformersTable';
 import TechPartnerChart from './TechPartnerChart';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
+import TopPerformersTable from './TopPerformersTable';
+import { LoadingSpinner } from '../ui/loading';
+import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
+import { Button } from '../ui/button';
+import { RefreshCw } from 'lucide-react';
 
 export default function DeveloperEngagementDashboard() {
-  const { data, isLoading } = useDashboardSystem();
+  const { data, isLoading, isError, refresh, lastUpdated, isFetching } = useDashboardSystemContext();
 
-  const handleExport = React.useCallback(() => {
-    if (!data) return;
-    const exportData = JSON.stringify(data, null, 2);
-    const blob = new Blob([exportData], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `pldg-data-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }, [data]);
+  React.useEffect(() => {
+    console.log('Dashboard State:', {
+      hasData: !!data,
+      metrics: data ? {
+        contributors: data.activeContributors,
+        techPartners: data.programHealth.activeTechPartners,
+        engagementTrends: data.engagementTrends.length,
+        technicalProgress: data.technicalProgress.length
+      } : null,
+      isLoading,
+      isError,
+      isFetching,
+      lastUpdated: new Date(lastUpdated).toISOString()
+    });
+  }, [data, isLoading, isError, isFetching, lastUpdated]);
 
-  if (isLoading || !data) {
-    return <LoadingCard />;
+  if (isLoading || (!data && !isError)) {
+    return (
+      <div className="container mx-auto p-4">
+        <div className="h-[calc(100vh-200px)] flex items-center justify-center">
+          <LoadingSpinner />
+        </div>
+      </div>
+    );
+  }
+
+  if (isError || !data) {
+    return (
+      <div className="container mx-auto p-4">
+        <div className="p-4 text-center text-red-600">
+          Unable to load dashboard data. Please try refreshing.
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      {/* Header */}
+      {/* Header Section */}
       <header className="mb-8 bg-gradient-to-r from-indigo-700 to-purple-700 rounded-2xl p-6 text-white shadow-xl">
-        <div className="flex justify-between items-start">
+        <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold">PLDG Developer Engagement</h1>
             <p className="mt-2 text-indigo-100">Real-time insights and engagement metrics</p>
           </div>
-          <LastUpdated />
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-indigo-200">
+              Last updated: {new Date(lastUpdated).toLocaleString()}
+            </span>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={refresh}
+              disabled={isFetching}
+              className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white border-white/20"
+            >
+              <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
+              Refresh Data
+            </Button>
+          </div>
         </div>
       </header>
 
-      {/* Executive Summary - Most important metrics */}
+      {/* Top Section - Executive Summary */}
       <div className="mb-6">
-        <ExecutiveSummary data={data} onExport={handleExport} />
+        <ExecutiveSummary data={data} />
       </div>
 
-      {/* Action Items - Critical attention areas */}
-      <div className="mb-6">
+      {/* Action Items Section */}
+      <div className="mb-8">
         <ActionableInsights data={data} />
       </div>
 
-      {/* Key Charts - Side by side */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <Suspense fallback={<LoadingCard />}>
-          <EngagementChart data={data.engagementTrends} />
-        </Suspense>
-        <Suspense fallback={<LoadingCard />}>
-          <TechnicalProgressChart 
-            data={data.technicalProgress} 
-            githubData={{
-              inProgress: data.issueMetrics[0]?.open || 0,
-              done: data.issueMetrics[0]?.closed || 0
-            }}
-          />
-        </Suspense>
+      {/* Charts Section - Side by Side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <EngagementChart data={data.engagementTrends} />
+        <TechnicalProgressChart 
+          data={data.technicalProgress} 
+          githubData={{
+            inProgress: data.issueMetrics[0]?.open || 0,
+            done: data.issueMetrics[0]?.closed || 0
+          }}
+        />
       </div>
 
-      {/* Tech Partner Overview */}
-      <div className="mb-6">
+      {/* Full Width Sections */}
+      <div className="space-y-8">
+        {/* Tech Partner Overview */}
         <TechPartnerChart data={data.techPartnerPerformance} />
-      </div>
 
-      {/* Top Performers */}
-      <div className="mb-6">
+        {/* Top Contributors */}
         <Card>
           <CardHeader>
             <CardTitle>Top Contributors</CardTitle>

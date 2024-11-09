@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { EngagementTrend } from '../../types/dashboard';
+import { EngagementTrend } from '@/types/dashboard';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '../ui/card';
 
@@ -10,6 +10,29 @@ interface Props {
 }
 
 export default function EngagementChart({ data }: Props) {
+  React.useEffect(() => {
+    console.log('EngagementChart data:', {
+      dataPoints: data.length,
+      firstWeek: data[0]?.week,
+      lastWeek: data[data.length - 1]?.week,
+      timestamp: new Date().toISOString()
+    });
+  }, [data]);
+
+  if (!data?.length) {
+    return (
+      <Card className="h-[500px]">
+        <CardHeader>
+          <CardTitle>Engagement Trends</CardTitle>
+          <CardDescription>Weekly engagement levels</CardDescription>
+        </CardHeader>
+        <CardContent className="h-[400px] pt-4 flex items-center justify-center">
+          <div className="text-muted-foreground">No engagement data available</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="h-[500px]">
       <CardHeader>

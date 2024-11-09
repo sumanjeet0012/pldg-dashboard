@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { TechnicalProgress } from '../../types/dashboard';
+import { TechnicalProgress } from '@/types/dashboard';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '../ui/card';
 import { ExternalLink } from 'lucide-react';
@@ -21,7 +21,15 @@ const GITHUB_LINKS = {
 };
 
 export default function TechnicalProgressChart({ data, githubData }: Props) {
-  if (!data || !data.length) {
+  React.useEffect(() => {
+    console.log('TechnicalProgress data:', {
+      dataPoints: data.length,
+      githubData,
+      timestamp: new Date().toISOString()
+    });
+  }, [data, githubData]);
+
+  if (!data?.length) {
     return (
       <Card className="h-[500px]">
         <CardHeader>
@@ -29,7 +37,7 @@ export default function TechnicalProgressChart({ data, githubData }: Props) {
           <CardDescription>Weekly contribution tracking</CardDescription>
         </CardHeader>
         <CardContent className="h-[400px] pt-4 flex items-center justify-center">
-          <div className="text-muted-foreground">Loading data...</div>
+          <div className="text-muted-foreground">No data available</div>
         </CardContent>
       </Card>
     );

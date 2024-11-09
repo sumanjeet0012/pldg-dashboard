@@ -1,11 +1,16 @@
+"use client";
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 export function LoadingCard() {
   return (
-    <div className="rounded-lg border bg-card p-6 animate-pulse">
-      <div className="h-4 bg-muted rounded w-1/4 mb-4"></div>
-      <div className="space-y-3">
-        <div className="h-3 bg-muted rounded w-3/4"></div>
-        <div className="h-3 bg-muted rounded w-1/2"></div>
-      </div>
-    </div>
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>Loading...</CardTitle>
+      </CardHeader>
+      <CardContent className="h-[300px] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500" />
+      </CardContent>
+    </Card>
   );
 } 

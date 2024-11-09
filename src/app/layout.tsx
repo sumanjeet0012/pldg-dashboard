@@ -4,6 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { Providers } from '@/components/providers/Providers'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { Toaster } from 'sonner';
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -20,17 +21,18 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <Providers>
-          <div className="min-h-screen flex flex-col">
-            <Header />
-            <main className="flex-1">
-              <ErrorBoundary>
+        <ErrorBoundary>
+          <Providers>
+            <div className="min-h-screen flex flex-col">
+              <Header />
+              <main className="flex-1">
                 {children}
-              </ErrorBoundary>
-            </main>
-            <Footer />
-          </div>
-        </Providers>
+              </main>
+              <Footer />
+            </div>
+          </Providers>
+        </ErrorBoundary>
+        <Toaster />
       </body>
     </html>
   )
