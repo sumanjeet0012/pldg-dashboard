@@ -98,28 +98,32 @@ export async function processEngagementData(rawData: EngagementData[]): Promise<
   const issueMetrics = processRawIssueMetrics(sortedData);
 
   // Calculate program health metrics
-  const programHealth = {
-    npsScore,
-    engagementRate: calculateEngagementRate(sortedData),
-    activeTechPartners: new Set(
-      sortedData.flatMap(entry => 
-        Array.isArray(entry['Which Tech Partner']) 
-          ? entry['Which Tech Partner']
-          : entry['Which Tech Partner']?.split(',').map(p => p.trim()) ?? []
-      )
-    ).size
-  };
-
-  // Calculate key metrics before using them
-  const activeContributors = new Set(sortedData.map(e => e.Name)).size;
-  
-  const activeTechPartners = new Set(
+  const techPartnerSet = new Set(
     sortedData.flatMap(entry => 
       Array.isArray(entry['Which Tech Partner']) 
         ? entry['Which Tech Partner']
         : entry['Which Tech Partner']?.split(',').map(p => p.trim()) ?? []
     )
-  ).size;
+  );
+  
+  const programHealth = {
+    npsScore,
+    engagementRate: calculateEngagementRate(sortedData),
+    activeTechPartners: Array.from(techPartnerSet).length
+  };
+
+  // Calculate key metrics before using them
+  const contributorsSet = new Set(sortedData.map(e => e.Name));
+  const activeContributors = Array.from(contributorsSet).length;
+  
+  const activeTechPartnersSet = new Set(
+    sortedData.flatMap(entry => 
+      Array.isArray(entry['Which Tech Partner']) 
+        ? entry['Which Tech Partner']
+        : entry['Which Tech Partner']?.split(',').map(p => p.trim()) ?? []
+    )
+  );
+  const activeTechPartners = Array.from(activeTechPartnersSet).length;
 
   const totalContributions = sortedData.reduce((sum, entry) => 
     sum + parseInt(entry['How many issues, PRs, or projects this week?'] || '0'), 0
@@ -263,7 +267,8 @@ export function processData(rawData: any): ProcessedData {
 
 // Helper function to combine and prioritize insights
 export function combineAndPrioritize(insights1: string[] = [], insights2: string[] = []): string[] {
-  const combined = [...new Set([...insights1, ...insights2])];
+  const uniqueInsights = new Set([...insights1, ...insights2]);
+  const combined = Array.from(uniqueInsights);
   return combined.slice(0, 5); // Return top 5 insights
 }
 
@@ -276,7 +281,8 @@ export function calculateEngagementScore(data: ProcessedData): number {
 
 // Calculate collaboration index based on tech partner interactions
 export function calculateCollaborationIndex(data: ProcessedData): number {
-  const activePartners = new Set(data.techPartnerMetrics.map(m => m.partner)).size;
+  const partnersSet = new Set(data.techPartnerMetrics.map(m => m.partner));
+  const activePartners = Array.from(partnersSet).length;
   const totalContributors = data.topPerformers.length;
   return Math.round((activePartners / totalContributors) * 100);
 }
