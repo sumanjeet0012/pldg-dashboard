@@ -5,7 +5,19 @@ import ExcelJS from 'exceljs';
 
 export async function exportDashboardAction(data: ProcessedData) {
   try {
-    console.log('Starting dashboard export...');
+    console.log('Starting dashboard export...', {
+      hasData: !!data,
+      metrics: {
+        contributors: data?.activeContributors,
+        trends: data?.engagementTrends?.length,
+        techPartners: data?.techPartnerMetrics?.length
+      }
+    });
+
+    if (!data) {
+      throw new Error('No data provided for export');
+    }
+
     const workbook = new ExcelJS.Workbook();
     
     // Overview Sheet
@@ -90,13 +102,37 @@ export async function exportDashboardAction(data: ProcessedData) {
       });
     });
 
-    // Generate buffer
-    const buffer = await workbook.xlsx.writeBuffer();
+    // Add validation before buffer creation
+    if (!workbook.worksheets.length) {
+      throw new Error('No worksheets created');
+    }
 
-    // Convert buffer to base64 for client-side download
+    // Generate buffer with error handling
+    let buffer: Buffer;
+    try {
+      buffer = await workbook.xlsx.writeBuffer() as Buffer;
+    } catch (bufferError) {
+      console.error('Buffer creation failed:', bufferError);
+      throw new Error('Failed to generate Excel file');
+    }
+
+    // Validate buffer
+    if (!buffer || buffer.length === 0) {
+      throw new Error('Generated buffer is empty');
+    }
+
+    // Convert buffer to base64 with validation
     const base64 = Buffer.from(buffer).toString('base64');
+    if (!base64) {
+      throw new Error('Base64 conversion failed');
+    }
 
-    console.log('Export completed successfully');
+    console.log('Export completed successfully:', {
+      bufferSize: buffer.length,
+      base64Length: base64.length,
+      timestamp: new Date().toISOString()
+    });
+
     return { 
       success: true, 
       data: base64,

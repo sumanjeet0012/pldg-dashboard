@@ -47,6 +47,14 @@ export default function DeveloperEngagementDashboard() {
       <div className="container mx-auto p-4">
         <div className="p-4 text-center text-red-600">
           Unable to load dashboard data. Please try refreshing.
+          <Button 
+            variant="outline"
+            size="sm"
+            onClick={refresh}
+            className="mt-4 mx-auto"
+          >
+            Retry
+          </Button>
         </div>
       </div>
     );
@@ -80,7 +88,7 @@ export default function DeveloperEngagementDashboard() {
       </header>
 
       {/* Top Section - Executive Summary */}
-      <div className="mb-6">
+      <div className="mb-6 bg-white rounded-lg shadow-md">
         <ExecutiveSummary data={data} />
       </div>
 
