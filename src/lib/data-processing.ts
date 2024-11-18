@@ -15,6 +15,17 @@ function parseTechPartners(techPartner: string | string[]): string[] {
   return techPartner?.split(',').map(p => p.trim()) ?? [];
 }
 
+// Helper function to parse week numbers consistently
+function parseWeekNumber(weekString: string): number {
+  const match = weekString.match(/Week #?(\d+)/i);
+  return match ? parseInt(match[1]) : 0;
+}
+
+// Helper function to format week string consistently
+function formatWeekString(weekString: string): string {
+  return weekString.replace(/\(.*?\)/, '').trim();
+}
+
 // Calculate NPS Score
 function calculateNPSScore(data: EngagementData[]): number {
   const scores = data
@@ -46,8 +57,8 @@ function calculateEngagementRate(data: EngagementData[]): number {
 function calculateWeeklyChange(data: EngagementData[]): number {
   const weeks = _.groupBy(data, 'Program Week');
   const weekNumbers = Object.keys(weeks).sort((a, b) => {
-    const weekA = parseInt(a.match(/Week (\d+)/)?.[1] || '0');
-    const weekB = parseInt(b.match(/Week (\d+)/)?.[1] || '0');
+    const weekA = parseWeekNumber(a);
+    const weekB = parseWeekNumber(b);
     return weekA - weekB;
   });
 
@@ -209,14 +220,17 @@ export function processData(
     githubStatus: githubData.statusGroups
   });
 
+  // Sort data by week number consistently
+  const sortByWeek = (a: string, b: string) => {
+    const weekA = parseWeekNumber(a);
+    const weekB = parseWeekNumber(b);
+    return weekA - weekB;
+  };
+
   // Calculate active weeks
   const activeWeeks = Array.from(new Set(airtableData.map(entry => entry['Program Week'])))
     .filter(Boolean)
-    .sort((a, b) => {
-      const weekA = parseInt(a.match(/Week (\d+)/)?.[1] || '0');
-      const weekB = parseInt(b.match(/Week (\d+)/)?.[1] || '0');
-      return weekA - weekB;
-    });
+    .sort(sortByWeek);
 
   // Calculate tech partners
   const techPartners = new Set(
@@ -249,21 +263,25 @@ export function processData(
     topPerformers: calculateTopPerformers(airtableData),
     techPartnerMetrics: calculateTechPartnerMetrics(airtableData),
     techPartnerPerformance: calculateTechPartnerPerformance(airtableData),
-    engagementTrends: Object.entries(_.groupBy(airtableData, 'Program Week')).map(([week, entries]) => ({
-      week,
-      'High Engagement': entries.filter(e => e['Engagement Participation ']?.includes('3 -')).length,
-      'Medium Engagement': entries.filter(e => e['Engagement Participation ']?.includes('2 -')).length,
-      'Low Engagement': entries.filter(e => e['Engagement Participation ']?.includes('1 -')).length,
-      total: entries.length
-    })),
-    technicalProgress: Object.entries(_.groupBy(airtableData, 'Program Week')).map(([week, entries]) => ({
-      week,
-      'Total Issues': entries.reduce((sum, entry) => 
-        sum + parseInt(entry['How many issues, PRs, or projects this week?'] || '0'), 0
-      ),
-      'In Progress': 0,
-      'Done': 0
-    })),
+    engagementTrends: Object.entries(_.groupBy(airtableData, 'Program Week'))
+      .sort((a, b) => sortByWeek(a[0], b[0]))
+      .map(([week, entries]) => ({
+        week: formatWeekString(week),
+        'High Engagement': entries.filter(e => e['Engagement Participation ']?.includes('3 -')).length,
+        'Medium Engagement': entries.filter(e => e['Engagement Participation ']?.includes('2 -')).length,
+        'Low Engagement': entries.filter(e => e['Engagement Participation ']?.includes('1 -')).length,
+        total: entries.length
+      })),
+    technicalProgress: Object.entries(_.groupBy(airtableData, 'Program Week'))
+      .sort((a, b) => sortByWeek(a[0], b[0]))
+      .map(([week, entries]) => ({
+        week: formatWeekString(week),
+        'Total Issues': entries.reduce((sum, entry) => 
+          sum + parseInt(entry['How many issues, PRs, or projects this week?'] || '0'), 0
+        ),
+        'In Progress': githubData?.statusGroups?.inProgress || 0,
+        'Done': githubData?.statusGroups?.done || 0
+      })),
     issueMetrics: processRawIssueMetrics(airtableData),
     actionItems: calculateActionItems(airtableData),
     feedbackSentiment: {

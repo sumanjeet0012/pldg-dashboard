@@ -33,6 +33,18 @@ export default function EngagementChart({ data }: Props) {
     );
   }
 
+  const chartData = React.useMemo(() => {
+    if (!data?.length) return [];
+
+    // Data is already sorted in processData function
+    return data.map(week => ({
+      name: week.week,
+      'High Engagement': week['High Engagement'],
+      'Medium Engagement': week['Medium Engagement'],
+      'Low Engagement': week['Low Engagement']
+    }));
+  }, [data]);
+
   return (
     <Card className="h-[500px]">
       <CardHeader>
@@ -41,7 +53,7 @@ export default function EngagementChart({ data }: Props) {
       </CardHeader>
       <CardContent className="h-[400px] pt-4">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+          <BarChart data={chartData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
             <defs>
               <linearGradient id="highEngagement" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#4CAF50" stopOpacity={0.8}/>
@@ -58,7 +70,7 @@ export default function EngagementChart({ data }: Props) {
             </defs>
             <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
             <XAxis 
-              dataKey="week" 
+              dataKey="name" 
               tick={{ fontSize: 12 }}
               tickMargin={10}
             />
