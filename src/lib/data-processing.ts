@@ -216,9 +216,15 @@ export function processData(
   githubData: GitHubData
 ): ProcessedData {
   console.log('Starting data processing:', {
-    airtableRecords: airtableData.length,
-    githubStatus: githubData.statusGroups
+    airtableRecords: airtableData?.length,
+    sampleRecord: airtableData?.[0],
+    githubStatus: githubData?.statusGroups
   });
+
+  if (!Array.isArray(airtableData) || !airtableData.length) {
+    console.error('Invalid or empty Airtable data:', airtableData);
+    throw new Error('Invalid Airtable data format');
+  }
 
   // Sort data by week number consistently
   const sortByWeek = (a: string, b: string) => {
@@ -234,14 +240,11 @@ export function processData(
 
   // Calculate tech partners
   const techPartners = new Set(
-    airtableData.flatMap(entry => {
-      const partner = entry['Which Tech Partner'];
-      return typeof partner === 'string' ? [partner] : partner || [];
-    })
+    airtableData.flatMap(entry => parseTechPartners(entry['Which Tech Partner']))
   );
 
   const activeContributorsCount = new Set(airtableData.map(e => e.Name)).size;
-  const totalContributions = airtableData.reduce((sum, entry) => 
+  const totalContributions = airtableData.reduce((sum, entry) =>
     sum + parseInt(entry['How many issues, PRs, or projects this week?']?.toString() || '0'), 0
   );
 
@@ -276,7 +279,7 @@ export function processData(
       .sort((a, b) => sortByWeek(a[0], b[0]))
       .map(([week, entries]) => ({
         week: formatWeekString(week),
-        'Total Issues': entries.reduce((sum, entry) => 
+        'Total Issues': entries.reduce((sum, entry) =>
           sum + parseInt(entry['How many issues, PRs, or projects this week?'] || '0'), 0
         ),
         'In Progress': githubData?.statusGroups?.inProgress || 0,
