@@ -17,7 +17,7 @@ interface CustomTooltipProps {
 }
 
 const parseWeekNumber = (weekString: string): number => {
-  const match = weekString?.match(/Week (\d+)/);
+  const match = weekString?.match(/Week #?(\d+)/i);
   return match ? parseInt(match[1], 10) : 0;
 };
 
@@ -50,16 +50,21 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
 
 export function TimeSeriesView({ data }: TimeSeriesViewProps) {
   const timeSeriesData = React.useMemo(() => {
+    if (!data?.length) return [];
+
+    console.log('TimeSeriesView processing data:', data);
+    console.log('First partner sample:', data[0]);
+
     const allData = data.flatMap(partner =>
-      partner.timeSeriesData.map(series => ({
-        week: series.week,
-        weekNumber: parseWeekNumber(series.week),
-        partner: partner.partner,
-        issues: series.issueCount,
-        contributors: series.contributors.length,
-        engagementLevel: series.engagementLevel
+      (partner.timeSeriesData || []).map(series => ({
+        week: series.week || '',
+        weekNumber: parseWeekNumber(series.week || ''),
+        partner: partner.partner || 'Unknown',
+        issues: series.issueCount || 0,
+        contributors: (series.contributors || []).length,
+        engagementLevel: series.engagementLevel || 0
       }))
-    );
+    ).filter(item => item.week && item.weekNumber > 0);
 
     // Sort by week number
     return allData.sort((a, b) => a.weekNumber - b.weekNumber);
