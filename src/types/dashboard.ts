@@ -78,6 +78,12 @@ export interface EnhancedTechPartnerData extends TechPartnerPerformance {
     githubUsername: string;
     issuesCompleted: number;
     engagementScore: number;
+    email?: string;
+    recentIssues?: Array<{
+      title: string;
+      link?: string;
+      description?: string;
+    }>;
   }[];
   collaborationMetrics: {
     weeklyParticipation: number;
