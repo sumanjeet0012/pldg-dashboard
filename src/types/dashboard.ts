@@ -66,6 +66,26 @@ export interface TechPartnerPerformance {
   issues: number;
 }
 
+export interface EnhancedTechPartnerData extends TechPartnerPerformance {
+  timeSeriesData: {
+    week: string;
+    issueCount: number;
+    contributors: string[];
+    engagementLevel: number;
+  }[];
+  contributorDetails: {
+    name: string;
+    githubUsername: string;
+    issuesCompleted: number;
+    engagementScore: number;
+  }[];
+  collaborationMetrics: {
+    weeklyParticipation: number;
+    additionalCalls: string[];
+    feedback: string;
+  };
+}
+
 export interface EngagementTrend {
   week: string;
   'High Engagement': number;
@@ -185,9 +205,9 @@ export interface GitHubUserContribution {
 
 export interface EnhancedGitHubData extends GitHubData {
   userContributions: Record<string, GitHubUserContribution>;
-  contributionDiscrepancies: Array<{ 
-    username: string; 
-    discrepancy: string 
+  contributionDiscrepancies: Array<{
+    username: string;
+    discrepancy: string
   }>;
 }
 

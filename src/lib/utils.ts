@@ -1,12 +1,14 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import _ from 'lodash'
-import { 
-  IssueMetrics, 
-  RawIssueMetric, 
-  ProcessedData, 
+import {
+  IssueMetrics,
+  RawIssueMetric,
+  ProcessedData,
   EnhancedProcessedData,
-  EngagementData
+  EngagementData,
+  EnhancedTechPartnerData,
+  TechPartnerPerformance
 } from '../types/dashboard'
 import { processDataWithAI } from './ai';
 
@@ -437,10 +439,128 @@ function calculateNPSScore(data: EngagementData[]): number {
   return Math.round(((promoters - detractors) / scores.length) * 100);
 }
 
-// Add the helper function here too
 function parseTechPartners(techPartner: string | string[]): string[] {
   if (Array.isArray(techPartner)) {
     return techPartner;
   }
   return techPartner?.split(',').map(p => p.trim()) ?? [];
+}
+
+// Helper functions for enhanced tech partner data processing
+function processEngagementLevels(items: EngagementData[]) {
+  return _(items)
+    .groupBy('Program Week')
+    .map((weekItems, week) => ({
+      week: week.replace(/\(.*?\)/, '').trim(),
+      highEngagement: weekItems.filter(e => e['Engagement Participation ']?.includes('3 -')).length,
+      mediumEngagement: weekItems.filter(e => e['Engagement Participation ']?.includes('2 -')).length,
+      lowEngagement: weekItems.filter(e => e['Engagement Participation ']?.includes('1 -')).length
+    }))
+    .value();
+}
+
+function processCollaborationDetails(items: EngagementData[]) {
+  return items
+    .filter(item => item['Tech Partner Collaboration?'] === 'Yes')
+    .map(item => ({
+      description: item['Describe your work with the tech partner'] || '',
+      additionalCalls: item['Which session(s) did you find most informative or impactful, and why?']?.split(',').map(s => s.trim()) || [],
+      weeklyFeedback: item['PLDG Feedback'] || ''
+    }));
+}
+
+function processIssueData(items: EngagementData[]): number {
+  return _.sumBy(items, item =>
+    parseInt(item['How many issues, PRs, or projects this week?'] || '0')
+  );
+}
+
+// Helper functions for enhanced tech partner data processing
+function processTimeSeriesData(partner: TechPartnerPerformance, engagementData: EngagementData[]) {
+  return _(engagementData)
+    .filter(item => item['Which Tech Partner'] === partner.partner)
+    .groupBy('Program Week')
+    .map((weekItems, week) => ({
+      week: week.replace(/\(.*?\)/, '').trim(),
+      issueCount: _.sumBy(weekItems, item =>
+        parseInt(item['How many issues, PRs, or projects this week?'] || '0')
+      ),
+      contributors: _.uniq(
+        weekItems
+          .map(item => item['Github Username'])
+          .filter((username): username is string => Boolean(username))
+      ),
+      engagementLevel: _.meanBy(weekItems, item => {
+        const participation = item['Engagement Participation '] || '';
+        if (participation.includes('3 -')) return 3;
+        if (participation.includes('2 -')) return 2;
+        if (participation.includes('1 -')) return 1;
+        return 0;
+      })
+    }))
+    .value();
+}
+
+function processContributorDetails(partner: TechPartnerPerformance, engagementData: EngagementData[]) {
+  return _(engagementData)
+    .filter(item => item['Which Tech Partner'] === partner.partner)
+    .groupBy('Github Username')
+    .map((userItems, githubUsername) => ({
+      name: userItems[0].Name || '',
+      githubUsername,
+      issuesCompleted: _.sumBy(userItems, item =>
+        parseInt(item['How many issues, PRs, or projects this week?'] || '0')
+      ),
+      engagementScore: _.meanBy(userItems, item => {
+        const participation = item['Engagement Participation '] || '';
+        if (participation.includes('3 -')) return 3;
+        if (participation.includes('2 -')) return 2;
+        if (participation.includes('1 -')) return 1;
+        return 0;
+      })
+    }))
+    .filter((item): item is { name: string; githubUsername: string; issuesCompleted: number; engagementScore: number } =>
+      Boolean(item.githubUsername)
+    )
+    .value();
+}
+
+function processCollaborationMetrics(partner: TechPartnerPerformance, engagementData: EngagementData[]) {
+  const partnerData = engagementData.filter(item =>
+    item['Which Tech Partner'] === partner.partner
+  );
+
+  const totalEntries = partnerData.length;
+  const activeEntries = partnerData.filter(item =>
+    item['Engagement Participation ']?.includes('3 -') ||
+    item['Engagement Participation ']?.includes('2 -')
+  ).length;
+
+  return {
+    weeklyParticipation: totalEntries ? (activeEntries / totalEntries) * 100 : 0,
+    additionalCalls: _.uniq(
+      partnerData
+        .map(item => item['Which session(s) did you find most informative or impactful, and why?'])
+        .filter(Boolean)
+        .flatMap(calls => (calls || '').split(',').map(call => call.trim()))
+        .filter(Boolean)
+    ),
+    feedback: _.uniq(
+      partnerData
+        .map(item => item['PLDG Feedback'])
+        .filter(Boolean)
+    ).join('\n')
+  };
+}
+
+export function enhanceTechPartnerData(
+  baseData: TechPartnerPerformance[],
+  engagementData: EngagementData[]
+): EnhancedTechPartnerData[] {
+  return baseData.map(partner => ({
+    ...partner,
+    timeSeriesData: processTimeSeriesData(partner, engagementData),
+    contributorDetails: processContributorDetails(partner, engagementData),
+    collaborationMetrics: processCollaborationMetrics(partner, engagementData)
+  }));
 }
