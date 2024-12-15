@@ -1,93 +1,70 @@
 'use client';
 
 import * as React from 'react';
-import { EnhancedTechPartnerData, IssueHighlight, IssueTracking } from '@/types/dashboard';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
+import { useState } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { EnhancedTechPartnerData, ActionableInsight } from '@/types/dashboard';
 import { TimeSeriesView } from './views/TimeSeriesView';
 import { ContributorView } from './views/ContributorView';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LineChart, Users, AlertCircle, CheckCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-interface Props {
+interface TechPartnerChartProps {
   data: EnhancedTechPartnerData[];
-  viewMode: 'timeline' | 'contributors';
-  onViewChange: (view: 'timeline' | 'contributors') => void;
-  onPartnerSelect?: (partner: string) => void;
 }
 
-const weekOrder = Array.from({ length: 12 }, (_, i) => `Week ${i + 1}`);
+export function TechPartnerChart({ data }: TechPartnerChartProps) {
+  const [selectedPartner, setSelectedPartner] = useState<string>('all');
+  const [view, setView] = useState<'timeline' | 'contributors'>('timeline');
 
-function getHighlightedIssues(partnerData: EnhancedTechPartnerData): IssueHighlight[] {
-  const issues: IssueHighlight[] = [];
+  const getHighlightedIssues = (partnerData: EnhancedTechPartnerData): ActionableInsight[] => {
+    const insights: ActionableInsight[] = [];
 
-  const mostActive = partnerData.issueTracking
-    .sort((a: IssueTracking, b: IssueTracking) => b.engagement - a.engagement)[0];
-  if (mostActive) {
-    issues.push({
-      type: 'success',
-      title: 'Most Active Issue',
-      description: mostActive.title,
-      link: mostActive.link
-    });
-  }
+    if (!partnerData?.timeSeriesData?.length) {
+      return insights;
+    }
 
-  const staleIssues = partnerData.issueTracking
-    .filter((issue: IssueTracking) => issue.status === 'open' && issue.engagement < 1);
-  if (staleIssues.length > 0) {
-    issues.push({
-      type: 'warning',
-      title: 'Needs Review',
-      description: `${staleIssues.length} stale issues need attention`,
-      link: staleIssues[0].link
-    });
-  }
+    const latestWeekData = [...partnerData.timeSeriesData]
+      .sort((a, b) => new Date(b.weekEndDate).getTime() - new Date(a.weekEndDate).getTime())[0];
 
-  return issues;
-}
+    if (latestWeekData?.issues?.length > 0) {
+      const mostActive = latestWeekData.issues.find(issue => issue?.status === 'open');
+      if (mostActive) {
+        insights.push({
+          type: 'success',
+          title: 'Active Issue',
+          description: mostActive.title || 'Latest issue',
+          link: mostActive.url || '#'
+        });
+      }
+    }
 
-export default function TechPartnerChart({ data, viewMode, onViewChange, onPartnerSelect }: Props) {
-  const [selectedPartner, setSelectedPartner] = React.useState<string>('all');
+    const staleIssues = partnerData.timeSeriesData
+      .flatMap(week => week.issues || [])
+      .filter(issue =>
+        issue?.status === 'open' &&
+        issue?.lastUpdated &&
+        new Date(issue.lastUpdated) < new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      );
 
-  const validPartners = React.useMemo(() =>
-    Array.from(new Set(data.map(item => item.partner))).sort(),
-    [data]
-  );
-
-  const processedData = React.useMemo(() => {
-    return data
-      .filter(item => selectedPartner === 'all' || item.partner === selectedPartner)
-      .map(item => ({
-        ...item,
-        timeSeriesData: item.timeSeriesData
-          .sort((a, b) => weekOrder.indexOf(a.week) - weekOrder.indexOf(b.week)),
-        highlightedIssues: getHighlightedIssues(item)
-      }))
-      .sort((a, b) => {
-        const weekA = weekOrder.indexOf(a.timeSeriesData[0]?.week || 'Week 0');
-        const weekB = weekOrder.indexOf(b.timeSeriesData[0]?.week || 'Week 0');
-        return weekA - weekB;
+    if (staleIssues.length > 0) {
+      insights.push({
+        type: 'warning',
+        title: 'Needs Review',
+        description: `${staleIssues.length} stale issue${staleIssues.length > 1 ? 's' : ''}`,
+        link: staleIssues[0]?.url || '#'
       });
+    }
+
+    return insights;
+  };
+
+  const filteredData = React.useMemo(() => {
+    if (selectedPartner === 'all') return data;
+    return data.filter(item => item.partner === selectedPartner);
   }, [data, selectedPartner]);
-
-  React.useEffect(() => {
-    onPartnerSelect?.(selectedPartner);
-  }, [selectedPartner, onPartnerSelect]);
-
-  if (!data?.length) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Partner Activity Overview</CardTitle>
-          <CardDescription>Comprehensive tech partner engagement metrics</CardDescription>
-        </CardHeader>
-        <CardContent className="h-[400px] flex items-center justify-center">
-          <div className="text-muted-foreground">No tech partner data available</div>
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
     <Card>
@@ -97,81 +74,82 @@ export default function TechPartnerChart({ data, viewMode, onViewChange, onPartn
             <CardTitle>Partner Activity Overview</CardTitle>
             <CardDescription>Comprehensive tech partner engagement metrics</CardDescription>
           </div>
-          <div className="flex items-center gap-4">
-            <Select
-              value={selectedPartner}
-              onValueChange={setSelectedPartner}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Select Partner" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Partners</SelectItem>
-                {validPartners.map(partner => (
-                  <SelectItem key={partner} value={partner}>
-                    {partner}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <ToggleGroup
-              type="single"
-              value={viewMode}
-              onValueChange={(value) => value && onViewChange(value as 'timeline' | 'contributors')}
-              aria-label="View mode selection"
-            >
-              <ToggleGroupItem value="timeline" aria-label="Show timeline view">
-                <LineChart className="h-4 w-4" />
-              </ToggleGroupItem>
-              <ToggleGroupItem value="contributors" aria-label="Show contributors view">
-                <Users className="h-4 w-4" />
-              </ToggleGroupItem>
-            </ToggleGroup>
-          </div>
+          <Select
+            value={selectedPartner}
+            onValueChange={setSelectedPartner}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="All Partners" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Partners</SelectItem>
+              {Array.from(new Set(data.map(item => item.partner))).map(partner => (
+                <SelectItem key={partner} value={partner}>
+                  {partner}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
+        <ToggleGroup
+          type="single"
+          value={view}
+          onValueChange={(value) => value && setView(value as 'timeline' | 'contributors')}
+          className="justify-start"
+        >
+          <ToggleGroupItem value="timeline" aria-label="Show timeline view">
+            Timeline
+          </ToggleGroupItem>
+          <ToggleGroupItem value="contributors" aria-label="Show contributors view">
+            Contributors
+          </ToggleGroupItem>
+        </ToggleGroup>
       </CardHeader>
       <CardContent>
-        <div className="space-y-6">
-          {processedData.map((partner) => (
-            <div key={partner.partner} className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">{partner.partner}</h3>
-                <div className="flex gap-2">
-                  {partner.highlightedIssues?.map((issue, index) => (
-                    <TooltipProvider key={index}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <a
-                            href={issue.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                              issue.type === 'warning'
-                                ? 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
-                                : 'bg-green-50 text-green-700 hover:bg-green-100'
-                            }`}
-                          >
-                            {issue.type === 'warning' ? (
-                              <AlertCircle className="w-4 h-4" />
-                            ) : (
-                              <CheckCircle className="w-4 h-4" />
-                            )}
-                            {issue.title}
-                          </a>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-xs">
-                          <p className="text-sm">{issue.description}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  ))}
-                </div>
+        {filteredData.map(partner => (
+          <div key={partner.partner} className="space-y-4 mb-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">{partner.partner}</h3>
+              <div className="flex gap-2">
+                {getHighlightedIssues(partner).map((insight, index) => (
+                  <TooltipProvider key={`${partner.partner}-${insight.title}-${index}`}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <a
+                          href={insight.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                            insight.type === 'warning'
+                              ? 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
+                              : 'bg-green-50 text-green-700 hover:bg-green-100'
+                          }`}
+                        >
+                          {insight.type === 'warning' ? (
+                            <AlertCircle className="w-4 h-4" />
+                          ) : (
+                            <CheckCircle className="w-4 h-4" />
+                          )}
+                          {insight.title}
+                        </a>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs">
+                        <p className="text-sm">{insight.description}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ))}
               </div>
             </div>
-          ))}
+          </div>
+        ))}
+        <div className="mt-4">
+          {view === 'timeline' ? (
+            <TimeSeriesView data={filteredData} />
+          ) : (
+            <ContributorView data={filteredData} />
+          )}
         </div>
-        {viewMode === 'timeline' && <TimeSeriesView data={processedData} />}
-        {viewMode === 'contributors' && <ContributorView data={processedData} />}
       </CardContent>
     </Card>
   );

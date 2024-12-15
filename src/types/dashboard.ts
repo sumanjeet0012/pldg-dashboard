@@ -14,7 +14,7 @@ export interface EngagementData {
   'Program Week': string;
   'Engagement Participation '?: string;
   'Tech Partner Collaboration?': string;
-  'Which Tech Partner': string | string[];
+  'Which Tech Partner': string[];
   'How many issues, PRs, or projects this week?': string;
   'How likely are you to recommend the PLDG to others?': string;
   'PLDG Feedback'?: string;
@@ -35,7 +35,7 @@ export interface EngagementData {
   'Technical Progress'?: string;
   'Collaboration Score'?: string;
   'Overall Impact'?: string;
-  [key: string]: string | undefined;
+  [key: string]: string | string[] | undefined;
 }
 
 export interface IssueResult {
@@ -125,9 +125,16 @@ export interface IssueTracking {
 export interface EnhancedTechPartnerData extends TechPartnerPerformance {
   timeSeriesData: {
     week: string;
+    weekEndDate: string;
     issueCount: number;
     contributors: string[];
     engagementLevel: number;
+    issues: Array<{
+      title: string;
+      url: string;
+      status: 'open' | 'closed';
+      lastUpdated: string;
+    }>;
   }[];
   contributorDetails: ContributorDetails[];
   issueTracking: IssueTracking[];

@@ -153,19 +153,23 @@ function calculateTechPartnerPerformance(data: EngagementData[]) {
       // Calculate contributor details
       const contributorDetails = _(items)
         .groupBy('Name')
-        .map((contribItems, name) => ({
-          name,
-          githubUsername: name.toLowerCase().replace(/\s+/g, '-'),
-          issuesCompleted: _.sumBy(contribItems, item =>
-            parseInt(item['How many issues, PRs, or projects this week?'] || '0')
-          ),
-          engagementScore: _.meanBy(contribItems, item => {
-            const participation = item['Engagement Participation ']?.trim() || '';
-            return participation.startsWith('3') ? 3 :
-                   participation.startsWith('2') ? 2 :
-                   participation.startsWith('1') ? 1 : 0;
-          })
-        }))
+        .map((contribItems, name) => {
+          const githubUsername = contribItems[0]['Github Username']?.trim();
+          return {
+            name,
+            githubUsername: githubUsername || '', // Only use actual GitHub usernames
+            email: contribItems[0]['Email Address'],
+            issuesCompleted: _.sumBy(contribItems, item =>
+              parseInt(item['How many issues, PRs, or projects this week?'] || '0')
+            ),
+            engagementScore: _.meanBy(contribItems, item => {
+              const participation = item['Engagement Participation ']?.trim() || '';
+              return participation.startsWith('3') ? 3 :
+                     participation.startsWith('2') ? 2 :
+                     participation.startsWith('1') ? 1 : 0;
+            })
+          };
+        })
         .value();
 
       // Find most active and stale issues

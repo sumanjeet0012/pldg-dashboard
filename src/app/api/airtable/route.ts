@@ -5,8 +5,8 @@ export async function GET() {
     console.log('Fetching from Airtable API...');
 
     // Validate environment variables
-    const baseId = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID;
-    const apiKey = process.env.NEXT_PUBLIC_AIRTABLE_API_KEY;
+    const baseId = process.env.AIRTABLE_BASE_ID;
+    const apiKey = process.env.AIRTABLE_API_KEY;
 
     if (!baseId || !apiKey) {
       console.error('Missing required Airtable environment variables');
@@ -66,6 +66,8 @@ export async function GET() {
       'How many issues, PRs, or projects this week?': record.fields['How many issues, PRs, or projects this week?'] || '0',
       'How likely are you to recommend the PLDG to others?': record.fields['How likely are you to recommend the PLDG to others?'] || '0',
       'PLDG Feedback': record.fields['PLDG Feedback'] || '',
+      'GitHub Issue Title': record.fields['GitHub Issue Title'] || '',
+      'GitHub Issue URL': record.fields['GitHub Issue URL'] || '',
       'Created': record.fields['Created'] || record.createdTime || ''
     }));
 
