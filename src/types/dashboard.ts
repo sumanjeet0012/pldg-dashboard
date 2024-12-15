@@ -84,6 +84,21 @@ export interface TechPartnerFilter {
   weeks: string[]; // Chronologically ordered weeks 1-12
 }
 
+export interface IssueHighlight {
+  type: 'success' | 'warning';
+  title: string;
+  description: string;
+  link?: string;
+}
+
+export interface IssueTracking {
+  title: string;
+  link: string;
+  status: 'open' | 'closed';
+  engagement: number;
+  week: string;
+}
+
 export interface EnhancedTechPartnerData extends TechPartnerPerformance {
   timeSeriesData: {
     week: string;
@@ -92,12 +107,8 @@ export interface EnhancedTechPartnerData extends TechPartnerPerformance {
     engagementLevel: number;
   }[];
   contributorDetails: ContributorDetails[];
-  highlightedIssues?: {
-    type: 'success' | 'warning';
-    title: string;
-    description: string;
-    link?: string;
-  }[];
+  issueTracking: IssueTracking[];
+  highlightedIssues?: IssueHighlight[];
 }
 
 export interface EngagementTrend {

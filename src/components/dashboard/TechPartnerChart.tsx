@@ -1,13 +1,14 @@
 'use client';
 
 import * as React from 'react';
-import { EnhancedTechPartnerData } from '@/types/dashboard';
+import { EnhancedTechPartnerData, IssueHighlight, IssueTracking } from '@/types/dashboard';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { TimeSeriesView } from './views/TimeSeriesView';
 import { ContributorView } from './views/ContributorView';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LineChart, Users } from 'lucide-react';
+import { LineChart, Users, AlertCircle, CheckCircle } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface Props {
   data: EnhancedTechPartnerData[];
@@ -16,8 +17,35 @@ interface Props {
   onPartnerSelect?: (partner: string) => void;
 }
 
-// Define chronological week order
 const weekOrder = Array.from({ length: 12 }, (_, i) => `Week ${i + 1}`);
+
+function getHighlightedIssues(partnerData: EnhancedTechPartnerData): IssueHighlight[] {
+  const issues: IssueHighlight[] = [];
+
+  const mostActive = partnerData.issueTracking
+    .sort((a: IssueTracking, b: IssueTracking) => b.engagement - a.engagement)[0];
+  if (mostActive) {
+    issues.push({
+      type: 'success',
+      title: 'Most Active Issue',
+      description: mostActive.title,
+      link: mostActive.link
+    });
+  }
+
+  const staleIssues = partnerData.issueTracking
+    .filter((issue: IssueTracking) => issue.status === 'open' && issue.engagement < 1);
+  if (staleIssues.length > 0) {
+    issues.push({
+      type: 'warning',
+      title: 'Needs Review',
+      description: `${staleIssues.length} stale issues need attention`,
+      link: staleIssues[0].link
+    });
+  }
+
+  return issues;
+}
 
 export default function TechPartnerChart({ data, viewMode, onViewChange, onPartnerSelect }: Props) {
   const [selectedPartner, setSelectedPartner] = React.useState<string>('all');
@@ -33,7 +61,8 @@ export default function TechPartnerChart({ data, viewMode, onViewChange, onPartn
       .map(item => ({
         ...item,
         timeSeriesData: item.timeSeriesData
-          .sort((a, b) => weekOrder.indexOf(a.week) - weekOrder.indexOf(b.week))
+          .sort((a, b) => weekOrder.indexOf(a.week) - weekOrder.indexOf(b.week)),
+        highlightedIssues: getHighlightedIssues(item)
       }))
       .sort((a, b) => {
         const weekA = weekOrder.indexOf(a.timeSeriesData[0]?.week || 'Week 0');
@@ -102,6 +131,45 @@ export default function TechPartnerChart({ data, viewMode, onViewChange, onPartn
         </div>
       </CardHeader>
       <CardContent>
+        <div className="space-y-6">
+          {processedData.map((partner) => (
+            <div key={partner.partner} className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">{partner.partner}</h3>
+                <div className="flex gap-2">
+                  {partner.highlightedIssues?.map((issue, index) => (
+                    <TooltipProvider key={index}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <a
+                            href={issue.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                              issue.type === 'warning'
+                                ? 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
+                                : 'bg-green-50 text-green-700 hover:bg-green-100'
+                            }`}
+                          >
+                            {issue.type === 'warning' ? (
+                              <AlertCircle className="w-4 h-4" />
+                            ) : (
+                              <CheckCircle className="w-4 h-4" />
+                            )}
+                            {issue.title}
+                          </a>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs">
+                          <p className="text-sm">{issue.description}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
         {viewMode === 'timeline' && <TimeSeriesView data={processedData} />}
         {viewMode === 'contributors' && <ContributorView data={processedData} />}
       </CardContent>
