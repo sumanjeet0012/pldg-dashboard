@@ -16,8 +16,12 @@ interface Props {
   onPartnerSelect?: (partner: string) => void;
 }
 
+// Define chronological week order
+const weekOrder = Array.from({ length: 12 }, (_, i) => `Week ${i + 1}`);
+
 export default function TechPartnerChart({ data, viewMode, onViewChange, onPartnerSelect }: Props) {
   const [selectedPartner, setSelectedPartner] = React.useState<string>('all');
+
   const validPartners = React.useMemo(() =>
     Array.from(new Set(data.map(item => item.partner))).sort(),
     [data]
@@ -26,9 +30,14 @@ export default function TechPartnerChart({ data, viewMode, onViewChange, onPartn
   const processedData = React.useMemo(() => {
     return data
       .filter(item => selectedPartner === 'all' || item.partner === selectedPartner)
+      .map(item => ({
+        ...item,
+        timeSeriesData: item.timeSeriesData
+          .sort((a, b) => weekOrder.indexOf(a.week) - weekOrder.indexOf(b.week))
+      }))
       .sort((a, b) => {
-        const weekA = parseInt(a.timeSeriesData[0]?.week.split(' ')[1] || '0');
-        const weekB = parseInt(b.timeSeriesData[0]?.week.split(' ')[1] || '0');
+        const weekA = weekOrder.indexOf(a.timeSeriesData[0]?.week || 'Week 0');
+        const weekB = weekOrder.indexOf(b.timeSeriesData[0]?.week || 'Week 0');
         return weekA - weekB;
       });
   }, [data, selectedPartner]);
