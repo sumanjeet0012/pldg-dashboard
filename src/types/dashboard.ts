@@ -12,9 +12,9 @@ export interface ActionItem {
 export interface EngagementData {
   Name: string;
   'Program Week': string;
-  'Engagement Participation ': string;
+  'Engagement Participation '?: string;
   'Tech Partner Collaboration?': string;
-  'Which Tech Partner': string | string[];
+  'Which Tech Partner': string[];
   'How many issues, PRs, or projects this week?': string;
   'How likely are you to recommend the PLDG to others?': string;
   'PLDG Feedback'?: string;
@@ -26,6 +26,29 @@ export interface EngagementData {
   'Engagement Tracking'?: string;
   'Describe your work with the tech partner'?: string;
   'Did you work on an issue, PR, or project this week?'?: string;
+  'GitHub Issue Title'?: string;
+  'GitHub Issue URL'?: string;
+  'Issue Status'?: 'Open' | 'Closed';
+  'Engagement Level'?: string;
+  'Additional Notes'?: string;
+  'Feedback Sentiment'?: string;
+  'Technical Progress'?: string;
+  'Collaboration Score'?: string;
+  'Overall Impact'?: string;
+  [key: string]: string | string[] | undefined;
+}
+
+export interface IssueResult {
+  title: string;
+  link: string;
+  status: string;
+  engagement: number;
+  week: string;
+}
+
+export interface IssueHighlight {
+  title: string;
+  url: string;
 }
 
 export interface IssueMetrics {
@@ -64,6 +87,59 @@ export interface TechPartnerMetrics {
 export interface TechPartnerPerformance {
   partner: string;
   issues: number;
+}
+
+export interface ContributorDetails {
+  name: string;
+  githubUsername: string;
+  issuesCompleted: number;
+  engagementScore: number;
+  email?: string;
+  recentIssues?: Array<{
+    title: string;
+    link?: string;
+    description?: string;
+  }>;
+}
+
+export interface TechPartnerFilter {
+  selectedPartner: string | 'all';
+  weeks: string[]; // Chronologically ordered weeks 1-12
+}
+
+export interface ActionableInsight {
+  type: 'success' | 'warning';
+  title: string;
+  description: string;
+  link?: string;
+}
+
+export interface IssueTracking {
+  title: string;
+  link: string;
+  status: 'open' | 'closed';
+  engagement: number;
+  week: string;
+}
+
+export interface EnhancedTechPartnerData extends TechPartnerPerformance {
+  timeSeriesData: {
+    week: string;
+    weekEndDate: string;
+    issueCount: number;
+    contributors: string[];
+    engagementLevel: number;
+    issues: Array<{
+      title: string;
+      url: string;
+      status: 'open' | 'closed';
+      lastUpdated: string;
+    }>;
+  }[];
+  contributorDetails: ContributorDetails[];
+  issueTracking: IssueTracking[];
+  mostActiveIssue: { title: string; url: string };
+  staleIssue: { title: string; url: string };
 }
 
 export interface EngagementTrend {
@@ -110,6 +186,7 @@ export interface ProcessedData {
   techPartnerMetrics: TechPartnerMetrics[];
   techPartnerPerformance: TechPartnerPerformance[];
   contributorGrowth: ContributorGrowth[];
+  rawEngagementData: EngagementData[];
 }
 
 export interface AIMetrics {
@@ -185,9 +262,9 @@ export interface GitHubUserContribution {
 
 export interface EnhancedGitHubData extends GitHubData {
   userContributions: Record<string, GitHubUserContribution>;
-  contributionDiscrepancies: Array<{ 
-    username: string; 
-    discrepancy: string 
+  contributionDiscrepancies: Array<{
+    username: string;
+    discrepancy: string
   }>;
 }
 

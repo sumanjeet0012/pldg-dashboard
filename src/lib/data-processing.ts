@@ -1,11 +1,10 @@
-import { 
-  ProcessedData, 
-  EngagementData, 
-  GitHubData, 
-  ActionItem, 
-  IssueMetrics 
-} from '@/types/dashboard';
 import _ from 'lodash';
+import {
+  EngagementData, ProcessedData, TechPartnerMetrics,
+  TechPartnerPerformance, ContributorDetails, IssueResult,
+  IssueHighlight, EnhancedTechPartnerData, ActionItem,
+  GitHubData, IssueMetrics
+} from '@/types/dashboard';
 
 // Helper function to parse tech partners consistently
 function parseTechPartners(techPartner: string | string[]): string[] {
@@ -114,7 +113,7 @@ function calculateTechPartnerMetrics(data: EngagementData[]) {
     .groupBy('Which Tech Partner')
     .map((items, partner) => ({
       partner,
-      totalIssues: _.sumBy(items, item => 
+      totalIssues: _.sumBy(items, item =>
         parseInt(item['How many issues, PRs, or projects this week?'] || '0')
       ),
       activeContributors: new Set(items.map(item => item.Name)).size,
@@ -128,12 +127,96 @@ function calculateTechPartnerMetrics(data: EngagementData[]) {
 function calculateTechPartnerPerformance(data: EngagementData[]) {
   return _(data)
     .groupBy('Which Tech Partner')
-    .map((items, partner) => ({
-      partner,
-      issues: _.sumBy(items, item => 
-        parseInt(item['How many issues, PRs, or projects this week?'] || '0')
-      )
-    }))
+    .flatMap((items, partner) => {
+      // Skip empty partner entries
+      if (!partner || partner === '[]') return [];
+
+      // Calculate time series data
+      const timeSeriesData = _(items)
+        .groupBy('Program Week')
+        .map((weekItems, week) => ({
+          week: formatWeekString(week),
+          issueCount: _.sumBy(weekItems, item =>
+            parseInt(item['How many issues, PRs, or projects this week?'] || '0')
+          ),
+          contributors: Array.from(new Set(weekItems.map(item => item.Name))),
+          engagementLevel: _.meanBy(weekItems, item => {
+            const participation = item['Engagement Participation ']?.trim() || '';
+            return participation.startsWith('3') ? 3 :
+                   participation.startsWith('2') ? 2 :
+                   participation.startsWith('1') ? 1 : 0;
+          })
+        }))
+        .orderBy(item => parseWeekNumber(item.week))
+        .value();
+
+      // Calculate contributor details
+      const contributorDetails = _(items)
+        .groupBy('Name')
+        .map((contribItems, name) => {
+          const githubUsername = contribItems[0]['Github Username']?.trim();
+          return {
+            name,
+            githubUsername: githubUsername || '', // Only use actual GitHub usernames
+            email: contribItems[0]['Email Address'],
+            issuesCompleted: _.sumBy(contribItems, item =>
+              parseInt(item['How many issues, PRs, or projects this week?'] || '0')
+            ),
+            engagementScore: _.meanBy(contribItems, item => {
+              const participation = item['Engagement Participation ']?.trim() || '';
+              return participation.startsWith('3') ? 3 :
+                     participation.startsWith('2') ? 2 :
+                     participation.startsWith('1') ? 1 : 0;
+            })
+          };
+        })
+        .value();
+
+      // Find most active and stale issues
+      const issueTracking: IssueResult[] = items.map(item => ({
+        title: item['GitHub Issue Title'] || '',
+        link: item['GitHub Issue URL'] || '',
+        status: item['Issue Status']?.toLowerCase() === 'closed' ? 'closed' : 'open',
+        engagement: item['Engagement Participation ']?.trim().startsWith('3') ? 3 :
+                   item['Engagement Participation ']?.trim().startsWith('2') ? 2 :
+                   item['Engagement Participation ']?.trim().startsWith('1') ? 1 : 0,
+        week: formatWeekString(item['Program Week'])
+      })).filter(issue => issue.title && issue.link);
+
+      const activeIssue = _(issueTracking)
+        .orderBy(['engagement'], ['desc'])
+        .head();
+
+      const staleIssueResult = _(issueTracking)
+        .filter(issue => issue.status === 'open' && issue.engagement < 1)
+        .head();
+
+      const mostActiveIssue: IssueHighlight = activeIssue
+        ? { title: activeIssue.title, url: activeIssue.link }
+        : { title: 'No active issues', url: '' };
+
+      const staleIssue: IssueHighlight = staleIssueResult
+        ? { title: staleIssueResult.title, url: staleIssueResult.link }
+        : { title: 'No stale issues', url: '' };
+
+      return [{
+        partner,
+        issues: _.sumBy(items, item =>
+          parseInt(item['How many issues, PRs, or projects this week?'] || '0')
+        ),
+        timeSeriesData,
+        contributorDetails,
+        issueTracking,
+        mostActiveIssue: {
+          title: mostActiveIssue.title,
+          url: mostActiveIssue.url
+        },
+        staleIssue: {
+          title: staleIssue.title,
+          url: staleIssue.url
+        }
+      }];
+    })
     .value();
 }
 
@@ -297,7 +380,8 @@ export function processData(
       newContributors: activeContributorsCount,
       returningContributors: 0,
       totalActive: activeContributorsCount
-    }]
+    }],
+    rawEngagementData: airtableData // Add this line to include raw data
   };
 
   console.log('Processing complete:', {
