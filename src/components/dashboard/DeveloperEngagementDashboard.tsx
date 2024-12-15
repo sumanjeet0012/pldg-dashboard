@@ -32,7 +32,8 @@ export default function DeveloperEngagementDashboard() {
     });
   }, [data, isLoading, isError, isFetching, lastUpdated]);
 
-  if (isLoading || (!data && !isError)) {
+  // Only show loading spinner during initial load
+  if (!data && isLoading) {
     return (
       <div className="container mx-auto p-4">
         <div className="h-[calc(100vh-200px)] flex items-center justify-center">
@@ -47,7 +48,7 @@ export default function DeveloperEngagementDashboard() {
       <div className="container mx-auto p-4">
         <div className="p-4 text-center text-red-600">
           Unable to load dashboard data. Please try refreshing.
-          <Button 
+          <Button
             variant="outline"
             size="sm"
             onClick={refresh}
@@ -73,8 +74,8 @@ export default function DeveloperEngagementDashboard() {
             <span className="text-sm text-indigo-200">
               Last updated: {new Date(lastUpdated).toLocaleString()}
             </span>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="sm"
               onClick={refresh}
               disabled={isFetching}
@@ -100,8 +101,8 @@ export default function DeveloperEngagementDashboard() {
       {/* Charts Section - Side by Side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         <EngagementChart data={data.engagementTrends} />
-        <TechnicalProgressChart 
-          data={data.technicalProgress} 
+        <TechnicalProgressChart
+          data={data.technicalProgress}
           githubData={{
             inProgress: data.issueMetrics[0]?.open || 0,
             done: data.issueMetrics[0]?.closed || 0
