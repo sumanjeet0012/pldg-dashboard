@@ -83,8 +83,8 @@ function calculateWeeklyChange(data: EngagementData[]): number {
 
 // Calculate Positive Feedback
 function calculatePositiveFeedback(data: EngagementData[]): number {
-  return data.filter(entry => 
-    entry['PLDG Feedback']?.toLowerCase().includes('great') || 
+  return data.filter(entry =>
+    entry['PLDG Feedback']?.toLowerCase().includes('great') ||
     entry['PLDG Feedback']?.toLowerCase().includes('good')
   ).length;
 }
@@ -95,7 +95,10 @@ function calculateTopPerformers(data: EngagementData[]) {
     .groupBy('Name')
     .map((entries, name) => ({
       name,
-      totalIssues: _.sumBy(entries, e => parseInt(e['How many issues, PRs, or projects this week?'] || '0')),
+      totalIssues: _.sumBy(entries, e => {
+        const value = e['How many issues, PRs, or projects this week?'];
+        return value === '4+' ? 4 : parseInt(value || '0');
+      }),
       avgEngagement: _.meanBy(entries, e => {
         const participation = e['Engagement Participation ']?.trim() || '';
         return participation.startsWith('3') ? 3 :
@@ -113,9 +116,10 @@ function calculateTechPartnerMetrics(data: EngagementData[]) {
     .groupBy('Which Tech Partner')
     .map((items, partner) => ({
       partner,
-      totalIssues: _.sumBy(items, item =>
-        parseInt(item['How many issues, PRs, or projects this week?'] || '0')
-      ),
+      totalIssues: _.sumBy(items, item => {
+        const value = item['How many issues, PRs, or projects this week?'];
+        return value === '4+' ? 4 : parseInt(value || '0');
+      }),
       activeContributors: new Set(items.map(item => item.Name)).size,
       avgIssuesPerContributor: 0,
       collaborationScore: 0
@@ -125,7 +129,33 @@ function calculateTechPartnerMetrics(data: EngagementData[]) {
 
 // Calculate Tech Partner Performance
 function calculateTechPartnerPerformance(data: EngagementData[]) {
-  return _(data)
+  // Debug logging for data processing
+  console.log('Processing tech partner performance:', {
+    rawDataLength: data.length,
+    sampleEntry: data[0],
+    timestamp: new Date().toISOString()
+  });
+
+  // Flatten tech partner arrays before grouping
+  const flattenedData = data.flatMap(entry => {
+    const partners = Array.isArray(entry['Which Tech Partner'])
+      ? entry['Which Tech Partner']
+      : parseTechPartners(entry['Which Tech Partner'] || '');
+
+    // Debug logging for tech partner processing
+    console.log('Processing entry:', {
+      partners,
+      issueCount: entry['How many issues, PRs, or projects this week?'],
+      week: entry['Program Week']
+    });
+
+    return partners.map(partner => ({
+      ...entry,
+      'Which Tech Partner': partner
+    }));
+  });
+
+  return _(flattenedData)
     .groupBy('Which Tech Partner')
     .flatMap((items, partner) => {
       // Skip empty partner entries
@@ -134,19 +164,32 @@ function calculateTechPartnerPerformance(data: EngagementData[]) {
       // Calculate time series data
       const timeSeriesData = _(items)
         .groupBy('Program Week')
-        .map((weekItems, week) => ({
-          week: formatWeekString(week),
-          issueCount: _.sumBy(weekItems, item =>
-            parseInt(item['How many issues, PRs, or projects this week?'] || '0')
-          ),
-          contributors: Array.from(new Set(weekItems.map(item => item.Name))),
-          engagementLevel: _.meanBy(weekItems, item => {
-            const participation = item['Engagement Participation ']?.trim() || '';
-            return participation.startsWith('3') ? 3 :
-                   participation.startsWith('2') ? 2 :
-                   participation.startsWith('1') ? 1 : 0;
-          })
-        }))
+        .map((weekItems, week) => {
+          const weekDate = week.match(/\((.*?)\)/)?.[1]?.split('-')?.[1]?.trim();
+          return {
+            week: formatWeekString(week),
+            weekEndDate: weekDate ? new Date(weekDate).toISOString() : new Date().toISOString(),
+            issueCount: _.sumBy(weekItems, item => {
+              const value = item['How many issues, PRs, or projects this week?'];
+              return value === '4+' ? 4 : parseInt(value || '0');
+            }),
+            contributors: Array.from(new Set(weekItems.map(item => item.Name))),
+            engagementLevel: _.meanBy(weekItems, item => {
+              const participation = item['Engagement Participation ']?.trim() || '';
+              return participation.startsWith('3') ? 3 :
+                     participation.startsWith('2') ? 2 :
+                     participation.startsWith('1') ? 1 : 0;
+            }),
+            issues: weekItems
+              .filter(item => item['GitHub Issue Title'] && item['GitHub Issue URL'])
+              .map(item => ({
+                title: item['GitHub Issue Title'] || '',
+                url: item['GitHub Issue URL'] || '',
+                status: item['Issue Status']?.toLowerCase() === 'closed' ? 'closed' : 'open',
+                lastUpdated: new Date().toISOString() // Using current date as fallback since we don't have actual lastUpdated
+              }))
+          };
+        })
         .orderBy(item => parseWeekNumber(item.week))
         .value();
 
@@ -273,17 +316,18 @@ function calculateActionItems(data: EngagementData[]): ActionItem[] {
 // Process Raw Issue Metrics
 function processRawIssueMetrics(entries: EngagementData[]): IssueMetrics[] {
   const weeklyMetrics = _.groupBy(entries, 'Program Week');
-  
+
   return Object.entries(weeklyMetrics).map(([week, weekEntries]) => {
-    const totalIssues = weekEntries.reduce((sum, entry) => 
-      sum + parseInt(entry['How many issues, PRs, or projects this week?'] || '0'), 0
-    );
-    
+    const totalIssues = weekEntries.reduce((sum, entry) => {
+      const value = entry['How many issues, PRs, or projects this week?'];
+      return sum + (value === '4+' ? 4 : parseInt(value || '0'));
+    }, 0);
+
     const hasGitHubLink = weekEntries.some(entry => entry['Issue Link 1']);
-    const closedIssues = hasGitHubLink 
+    const closedIssues = hasGitHubLink
       ? weekEntries.filter(entry => entry['Issue Link 1']?.includes('closed')).length
       : Math.round(totalIssues * 0.7);
-    
+
     return {
       week: week.replace(/\(.*?\)/, '').trim(),
       open: totalIssues - closedIssues,
