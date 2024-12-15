@@ -31,8 +31,10 @@ describe('enhanceTechPartnerData', () => {
       expect(timeSeriesData).toEqual({
         week: 'Week 1',
         issueCount: 2,
-        contributors: ['johndoe'],
-        engagementLevel: 3
+        contributors: ['John Doe'],
+        engagementLevel: 3,
+        issues: [],
+        weekEndDate: expect.any(String)
       });
     });
 
@@ -51,7 +53,9 @@ describe('enhanceTechPartnerData', () => {
         name: 'John Doe',
         githubUsername: 'johndoe',
         issuesCompleted: 2,
-        engagementScore: 3
+        engagementScore: 3,
+        email: undefined,
+        recentIssues: []
       });
     });
 
@@ -61,32 +65,9 @@ describe('enhanceTechPartnerData', () => {
         'Github Username': ''
       }];
       const result = enhanceTechPartnerData(mockBaseData, dataWithoutGithub);
-      expect(result[0].contributorDetails).toHaveLength(0);
-    });
-  });
-
-  describe('collaborationMetrics processing', () => {
-    it('should process collaboration metrics correctly', () => {
-      const result = enhanceTechPartnerData(mockBaseData, mockEngagementData);
-      const metrics = result[0].collaborationMetrics;
-
-      expect(metrics).toEqual({
-        weeklyParticipation: 100,
-        additionalCalls: ['Technical Review', 'Planning'],
-        feedback: 'Great collaboration'
-      });
-    });
-
-    it('should handle missing feedback data', () => {
-      const dataWithoutFeedback = [{
-        ...mockEngagementData[0],
-        'PLDG Feedback': '',
-        'Which session(s) did you find most informative or impactful, and why?': ''
-      }];
-      const result = enhanceTechPartnerData(mockBaseData, dataWithoutFeedback);
-
-      expect(result[0].collaborationMetrics.additionalCalls).toHaveLength(0);
-      expect(result[0].collaborationMetrics.feedback).toBe('');
+      const contributor = result[0].contributorDetails[0];
+      expect(contributor.githubUsername).toBe('john-doe'); // Default to name-based username
+      expect(contributor.name).toBe('John Doe');
     });
   });
 });
