@@ -44,6 +44,14 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
 };
 
 export function TimeSeriesView({ data }: TimeSeriesViewProps) {
+  React.useEffect(() => {
+    console.log('TimeSeriesView data:', {
+      hasData: !!data?.length,
+      dataCount: data?.length,
+      timeSeriesData: data?.[0]?.timeSeriesData,
+    });
+  }, [data]);
+
   const timeSeriesData = data.flatMap(partner =>
     partner.timeSeriesData.map(series => ({
       week: series.week,

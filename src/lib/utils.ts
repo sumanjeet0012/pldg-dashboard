@@ -175,7 +175,8 @@ export async function processEngagementData(rawData: EngagementData[]): Promise<
     issueMetrics,
     feedbackSentiment,
     contributorGrowth: [],
-    programHealth
+    programHealth,
+    rawEngagementData: sortedData // Add the raw engagement data
   };
   
   try {
@@ -239,7 +240,7 @@ function processIssueMetrics(rawMetrics: RawIssueMetric[]): IssueMetrics[] {
 // Update the processData function to use the correct issue metrics processing
 export function processData(rawData: any): ProcessedData {
   const processedIssueMetrics = processIssueMetrics(rawData.issueMetrics || []);
-  
+
   return {
     weeklyChange: rawData.weeklyChange || 0,
     activeContributors: rawData.activeContributors || 0,
@@ -263,7 +264,8 @@ export function processData(rawData: any): ProcessedData {
       npsScore: rawData.programHealth?.npsScore || 0,
       engagementRate: rawData.programHealth?.engagementRate || 0,
       activeTechPartners: rawData.programHealth?.activeTechPartners || 0
-    }
+    },
+    rawEngagementData: rawData.rawEngagementData || [] // Add the raw engagement data
   };
 }
 
@@ -476,91 +478,166 @@ function processIssueData(items: EngagementData[]): number {
 }
 
 // Helper functions for enhanced tech partner data processing
-function processTimeSeriesData(partner: TechPartnerPerformance, engagementData: EngagementData[]) {
-  return _(engagementData)
-    .filter(item => item['Which Tech Partner'] === partner.partner)
+function processTimeSeriesData(engagementData: EngagementData[]) {
+  console.log('processTimeSeriesData: Starting', {
+    dataCount: engagementData.length,
+    sampleEntry: engagementData[0]
+  });
+
+  const result = _(engagementData)
     .groupBy('Program Week')
-    .map((weekItems, week) => ({
+    .map((weekEntries, week) => ({
       week: week.replace(/\(.*?\)/, '').trim(),
-      issueCount: _.sumBy(weekItems, item =>
-        parseInt(item['How many issues, PRs, or projects this week?'] || '0')
+      issueCount: _.sumBy(weekEntries, entry =>
+        parseInt(entry['How many issues, PRs, or projects this week?'] || '0')
       ),
-      contributors: _.uniq(
-        weekItems
-          .map(item => item['Github Username'])
-          .filter((username): username is string => Boolean(username))
-      ),
-      engagementLevel: _.meanBy(weekItems, item => {
-        const participation = item['Engagement Participation '] || '';
-        if (participation.includes('3 -')) return 3;
-        if (participation.includes('2 -')) return 2;
-        if (participation.includes('1 -')) return 1;
-        return 0;
+      contributors: Array.from(new Set(weekEntries.map(entry => entry.Name))),
+      engagementLevel: _.meanBy(weekEntries, entry => {
+        const participation = entry['Engagement Participation ']?.trim() || '';
+        return participation.startsWith('3') ? 3 :
+               participation.startsWith('2') ? 2 :
+               participation.startsWith('1') ? 1 : 0;
       })
     }))
     .value();
+
+  console.log('processTimeSeriesData: Complete', {
+    resultCount: result.length,
+    sampleResult: result[0]
+  });
+
+  return result;
 }
 
-function processContributorDetails(partner: TechPartnerPerformance, engagementData: EngagementData[]) {
-  return _(engagementData)
-    .filter(item => item['Which Tech Partner'] === partner.partner)
-    .groupBy('Github Username')
-    .map((userItems, githubUsername) => ({
-      name: userItems[0].Name || '',
-      githubUsername,
-      issuesCompleted: _.sumBy(userItems, item =>
-        parseInt(item['How many issues, PRs, or projects this week?'] || '0')
+function processContributorDetails(engagementData: EngagementData[]) {
+  console.log('processContributorDetails: Starting', {
+    dataCount: engagementData.length,
+    sampleEntry: engagementData[0]
+  });
+
+  const result = _(engagementData)
+    .groupBy('Name')
+    .map((entries, name) => ({
+      name,
+      githubUsername: entries[0]['Github Username'] || '',
+      email: entries[0]['Email Address'] || undefined,
+      issuesCompleted: _.sumBy(entries, e =>
+        parseInt(e['How many issues, PRs, or projects this week?'] || '0')
       ),
-      engagementScore: _.meanBy(userItems, item => {
-        const participation = item['Engagement Participation '] || '';
-        if (participation.includes('3 -')) return 3;
-        if (participation.includes('2 -')) return 2;
-        if (participation.includes('1 -')) return 1;
-        return 0;
-      })
+      engagementScore: _.meanBy(entries, e => {
+        const participation = e['Engagement Participation ']?.trim() || '';
+        return participation.startsWith('3') ? 3 :
+               participation.startsWith('2') ? 2 :
+               participation.startsWith('1') ? 1 : 0;
+      }),
+      recentIssues: entries
+        .filter(e => e['Issue Link 1'])
+        .map(e => ({
+          title: e['Issue Title 1'] || 'Untitled Issue',
+          link: e['Issue Link 1'],
+          description: e['Describe your work with the tech partner']
+        }))
     }))
-    .filter((item): item is { name: string; githubUsername: string; issuesCompleted: number; engagementScore: number } =>
-      Boolean(item.githubUsername)
-    )
     .value();
+
+  console.log('processContributorDetails: Complete', {
+    resultCount: result.length,
+    sampleResult: result[0]
+  });
+
+  return result;
 }
 
-function processCollaborationMetrics(partner: TechPartnerPerformance, engagementData: EngagementData[]) {
-  const partnerData = engagementData.filter(item =>
-    item['Which Tech Partner'] === partner.partner
+function processCollaborationMetrics(engagementData: EngagementData[]) {
+  console.log('processCollaborationMetrics: Starting', {
+    dataCount: engagementData.length,
+    sampleEntry: engagementData[0]
+  });
+
+  const partnerData = engagementData.map(item => ({
+    hasCollaboration: item['Tech Partner Collaboration?'] === 'Yes',
+    additionalCalls: item['Which session(s) did you find most informative or impactful, and why?'] || '',
+    feedback: item['PLDG Feedback'] || ''
+  }));
+
+  const activeEntries = partnerData.filter(item =>
+    item.hasCollaboration || item.additionalCalls || item.feedback
   );
 
-  const totalEntries = partnerData.length;
-  const activeEntries = partnerData.filter(item =>
-    item['Engagement Participation ']?.includes('3 -') ||
-    item['Engagement Participation ']?.includes('2 -')
-  ).length;
-
-  return {
-    weeklyParticipation: totalEntries ? (activeEntries / totalEntries) * 100 : 0,
-    additionalCalls: _.uniq(
+  const result = {
+    weeklyParticipation: activeEntries.length / Math.max(partnerData.length, 1) * 100,
+    additionalCalls: Array.from(new Set(
       partnerData
-        .map(item => item['Which session(s) did you find most informative or impactful, and why?'])
-        .filter(Boolean)
-        .flatMap(calls => (calls || '').split(',').map(call => call.trim()))
-        .filter(Boolean)
-    ),
-    feedback: _.uniq(
-      partnerData
-        .map(item => item['PLDG Feedback'])
-        .filter(Boolean)
-    ).join('\n')
+        .filter(item => item.additionalCalls)
+        .map(item => item.additionalCalls)
+        .filter((call): call is string => typeof call === 'string' && call.length > 0)
+    )),
+    feedback: partnerData
+      .filter(item => item.feedback)
+      .map(item => item.feedback)
+      .join('\n')
   };
+
+  console.log('processCollaborationMetrics: Complete', {
+    activeCount: activeEntries.length,
+    totalCount: partnerData.length,
+    result
+  });
+
+  return result;
 }
 
 export function enhanceTechPartnerData(
-  baseData: TechPartnerPerformance[],
-  engagementData: EngagementData[]
+  baseData: TechPartnerPerformance[] | undefined,
+  engagementData: EngagementData[] | undefined
 ): EnhancedTechPartnerData[] {
-  return baseData.map(partner => ({
-    ...partner,
-    timeSeriesData: processTimeSeriesData(partner, engagementData),
-    contributorDetails: processContributorDetails(partner, engagementData),
-    collaborationMetrics: processCollaborationMetrics(partner, engagementData)
-  }));
+  if (!baseData || !engagementData) {
+    console.log('enhanceTechPartnerData: Missing data', { hasBaseData: !!baseData, hasEngagementData: !!engagementData });
+    return [];
+  }
+
+  console.log('enhanceTechPartnerData: Processing', {
+    baseDataCount: baseData.length,
+    engagementDataCount: engagementData.length,
+    sampleBaseData: baseData[0],
+    sampleEngagementData: engagementData[0]
+  });
+
+  return baseData.map(partner => {
+    if (!partner.partner) {
+      console.log('enhanceTechPartnerData: Partner missing name', partner);
+      return {
+        ...partner,
+        timeSeriesData: [],
+        contributorDetails: [],
+        collaborationMetrics: {
+          weeklyParticipation: 0,
+          additionalCalls: [],
+          feedback: ''
+        }
+      };
+    }
+
+    const partnerEngagements = engagementData.filter(
+      entry => entry['Which Tech Partner'] &&
+      (Array.isArray(entry['Which Tech Partner'])
+        ? entry['Which Tech Partner'].includes(partner.partner)
+        : entry['Which Tech Partner'].split(',').map(p => p.trim()).includes(partner.partner)
+      )
+    );
+
+    console.log(`enhanceTechPartnerData: Processing partner ${partner.partner}`, {
+      engagementCount: partnerEngagements.length,
+      sampleEngagement: partnerEngagements[0]
+    });
+
+    const result: EnhancedTechPartnerData = {
+      ...partner,
+      timeSeriesData: processTimeSeriesData(partnerEngagements),
+      contributorDetails: processContributorDetails(partnerEngagements),
+      collaborationMetrics: processCollaborationMetrics(partnerEngagements)
+    };
+
+    return result;
+  });
 }

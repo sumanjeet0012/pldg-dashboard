@@ -1,5 +1,6 @@
 'use client';
 
+import * as React from 'react';
 import { EnhancedTechPartnerData } from '@/types/dashboard';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +10,14 @@ interface CollaborationViewProps {
 }
 
 export function CollaborationView({ data }: CollaborationViewProps) {
+  React.useEffect(() => {
+    console.log('CollaborationView data:', {
+      hasData: !!data?.length,
+      dataCount: data?.length,
+      collaborationMetrics: data?.[0]?.collaborationMetrics,
+    });
+  }, [data]);
+
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {data.map((partner) => (

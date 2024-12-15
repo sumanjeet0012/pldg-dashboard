@@ -66,6 +66,19 @@ export interface TechPartnerPerformance {
   issues: number;
 }
 
+export interface ContributorDetails {
+  name: string;
+  githubUsername: string;
+  issuesCompleted: number;
+  engagementScore: number;
+  email?: string;
+  recentIssues?: Array<{
+    title: string;
+    link?: string;
+    description?: string;
+  }>;
+}
+
 export interface EnhancedTechPartnerData extends TechPartnerPerformance {
   timeSeriesData: {
     week: string;
@@ -73,18 +86,7 @@ export interface EnhancedTechPartnerData extends TechPartnerPerformance {
     contributors: string[];
     engagementLevel: number;
   }[];
-  contributorDetails: {
-    name: string;
-    githubUsername: string;
-    issuesCompleted: number;
-    engagementScore: number;
-    email?: string;
-    recentIssues?: Array<{
-      title: string;
-      link?: string;
-      description?: string;
-    }>;
-  }[];
+  contributorDetails: ContributorDetails[];
   collaborationMetrics: {
     weeklyParticipation: number;
     additionalCalls: string[];
@@ -136,6 +138,7 @@ export interface ProcessedData {
   techPartnerMetrics: TechPartnerMetrics[];
   techPartnerPerformance: TechPartnerPerformance[];
   contributorGrowth: ContributorGrowth[];
+  rawEngagementData: EngagementData[];
 }
 
 export interface AIMetrics {
