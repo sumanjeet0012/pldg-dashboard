@@ -79,6 +79,11 @@ export interface ContributorDetails {
   }>;
 }
 
+export interface TechPartnerFilter {
+  selectedPartner: string | 'all';
+  weeks: string[]; // Chronologically ordered weeks 1-12
+}
+
 export interface EnhancedTechPartnerData extends TechPartnerPerformance {
   timeSeriesData: {
     week: string;
@@ -87,11 +92,12 @@ export interface EnhancedTechPartnerData extends TechPartnerPerformance {
     engagementLevel: number;
   }[];
   contributorDetails: ContributorDetails[];
-  collaborationMetrics: {
-    weeklyParticipation: number;
-    additionalCalls: string[];
-    feedback: string;
-  };
+  highlightedIssues?: {
+    type: 'success' | 'warning';
+    title: string;
+    description: string;
+    link?: string;
+  }[];
 }
 
 export interface EngagementTrend {
