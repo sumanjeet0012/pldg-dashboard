@@ -16,6 +16,11 @@ interface CustomTooltipProps {
   label?: string;
 }
 
+const parseWeekNumber = (weekString: string): number => {
+  const match = weekString?.match(/Week (\d+)/);
+  return match ? parseInt(match[1], 10) : 0;
+};
+
 const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   if (!active || !payload?.length) return null;
 
@@ -23,7 +28,7 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   return (
     <Card className="p-3 bg-white/95 shadow-lg border-0">
       <div className="space-y-2">
-        <div className="font-medium">{data.partner} - {label}</div>
+        <div className="font-medium">{data.partner} - Week {label ? parseWeekNumber(label) : ''}</div>
         <div className="grid gap-2 text-sm">
           <div className="flex items-center gap-2">
             <GitPullRequest className="h-4 w-4" />
@@ -44,23 +49,21 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
 };
 
 export function TimeSeriesView({ data }: TimeSeriesViewProps) {
-  React.useEffect(() => {
-    console.log('TimeSeriesView data:', {
-      hasData: !!data?.length,
-      dataCount: data?.length,
-      timeSeriesData: data?.[0]?.timeSeriesData,
-    });
-  }, [data]);
+  const timeSeriesData = React.useMemo(() => {
+    const allData = data.flatMap(partner =>
+      partner.timeSeriesData.map(series => ({
+        week: series.week,
+        weekNumber: parseWeekNumber(series.week),
+        partner: partner.partner,
+        issues: series.issueCount,
+        contributors: series.contributors.length,
+        engagementLevel: series.engagementLevel
+      }))
+    );
 
-  const timeSeriesData = data.flatMap(partner =>
-    partner.timeSeriesData.map(series => ({
-      week: series.week,
-      partner: partner.partner,
-      issues: series.issueCount,
-      contributors: series.contributors.length,
-      engagementLevel: series.engagementLevel
-    }))
-  );
+    // Sort by week number
+    return allData.sort((a, b) => a.weekNumber - b.weekNumber);
+  }, [data]);
 
   return (
     <ResponsiveContainer width="100%" height={400}>
@@ -70,6 +73,7 @@ export function TimeSeriesView({ data }: TimeSeriesViewProps) {
           dataKey="week"
           tick={{ fontSize: 12 }}
           tickMargin={10}
+          tickFormatter={(value) => `Week ${parseWeekNumber(value)}`}
         />
         <YAxis
           tick={{ fontSize: 12 }}

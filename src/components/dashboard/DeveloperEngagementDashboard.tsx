@@ -6,7 +6,7 @@ import ExecutiveSummary from './ExecutiveSummary';
 import { ActionableInsights } from './ActionableInsights';
 import EngagementChart from './EngagementChart';
 import TechnicalProgressChart from './TechnicalProgressChart';
-import TechPartnerChart from './TechPartnerChart';
+import { TechPartnerChart } from './TechPartnerChart';
 import TopPerformersTable from './TopPerformersTable';
 import { LoadingSpinner } from '../ui/loading';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
@@ -16,7 +16,6 @@ import { enhanceTechPartnerData } from '@/lib/utils';
 
 export default function DeveloperEngagementDashboard() {
   const { data, isLoading, isError, refresh, lastUpdated, isFetching } = useDashboardSystemContext();
-  const [viewMode, setViewMode] = React.useState<'timeline' | 'contributors' | 'collaboration'>('timeline');
 
   const enhancedTechPartnerData = React.useMemo(() =>
     data?.techPartnerPerformance && data?.rawEngagementData
@@ -122,11 +121,7 @@ export default function DeveloperEngagementDashboard() {
       {/* Full Width Sections */}
       <div className="space-y-8">
         {/* Tech Partner Overview */}
-        <TechPartnerChart
-          data={enhancedTechPartnerData}
-          viewMode={viewMode}
-          onViewChange={setViewMode}
-        />
+        <TechPartnerChart data={enhancedTechPartnerData} />
 
         {/* Top Contributors */}
         <Card>
