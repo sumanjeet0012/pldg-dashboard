@@ -7,6 +7,7 @@ export async function GET() {
     // Validate environment variables
     const baseId = process.env.AIRTABLE_BASE_ID;
     const apiKey = process.env.AIRTABLE_API_KEY;
+    const tableId = process.env.AIRTABLE_TABLE_ID || 'tblG6uoKbtsCtMBZV';
 
     if (!baseId || !apiKey) {
       console.error('Missing required Airtable environment variables');
@@ -17,7 +18,7 @@ export async function GET() {
     }
 
     const response = await fetch(
-      `https://api.airtable.com/v0/${baseId}/Weekly%20Engagement%20Survey`,
+      `https://api.airtable.com/v0/${baseId}/${tableId}`,
       {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
@@ -39,9 +40,15 @@ export async function GET() {
         status: response.status,
         statusText: response.statusText,
         error: errorText,
-        requestUrl: `https://api.airtable.com/v0/${baseId}/Weekly%20Engagement%20Survey`
+        baseId,
+        tableId,
+        requestUrl: `https://api.airtable.com/v0/${baseId}/${tableId}`
       });
-      throw new Error(`Airtable API error: ${response.statusText} - ${errorText}`);
+      return NextResponse.json({
+        error: `Airtable API error: ${response.statusText} - ${errorText}`,
+        status: response.status,
+        statusText: response.statusText
+      }, { status: response.status });
     }
 
     const data = await response.json();
