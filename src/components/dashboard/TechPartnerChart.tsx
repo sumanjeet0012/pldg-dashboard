@@ -17,6 +17,16 @@ interface Props {
 }
 
 export default function TechPartnerChart({ data, viewMode, onViewChange, onPartnerSelect }: Props) {
+  React.useEffect(() => {
+    console.log('TechPartnerChart data:', {
+      hasData: !!data?.length,
+      dataCount: data?.length,
+      firstPartner: data?.[0],
+      viewMode,
+      rawData: data
+    });
+  }, [data, viewMode]);
+
   if (!data?.length) {
     return (
       <Card>
@@ -31,19 +41,6 @@ export default function TechPartnerChart({ data, viewMode, onViewChange, onPartn
     );
   }
 
-  const renderView = () => {
-    switch (viewMode) {
-      case 'timeline':
-        return <TimeSeriesView data={data} />;
-      case 'contributors':
-        return <ContributorView data={data} />;
-      case 'collaboration':
-        return <CollaborationView data={data} />;
-      default:
-        return <TimeSeriesView data={data} />;
-    }
-  };
-
   return (
     <Card>
       <CardHeader>
@@ -52,7 +49,12 @@ export default function TechPartnerChart({ data, viewMode, onViewChange, onPartn
             <CardTitle>Partner Activity Overview</CardTitle>
             <CardDescription>Comprehensive tech partner engagement metrics</CardDescription>
           </div>
-          <ToggleGroup type="single" value={viewMode} onValueChange={onViewChange}>
+          <ToggleGroup
+            type="single"
+            value={viewMode}
+            onValueChange={(value) => value && onViewChange(value as 'timeline' | 'contributors' | 'collaboration')}
+            aria-label="View mode selection"
+          >
             <ToggleGroupItem value="timeline" aria-label="Show timeline view">
               <LineChart className="h-4 w-4" />
             </ToggleGroupItem>
@@ -66,7 +68,9 @@ export default function TechPartnerChart({ data, viewMode, onViewChange, onPartn
         </div>
       </CardHeader>
       <CardContent>
-        {renderView()}
+        {viewMode === 'timeline' && <TimeSeriesView data={data} />}
+        {viewMode === 'contributors' && <ContributorView data={data} />}
+        {viewMode === 'collaboration' && <CollaborationView data={data} />}
       </CardContent>
     </Card>
   );

@@ -5,8 +5,8 @@ export async function GET() {
     console.log('Fetching from Airtable API...');
 
     // Validate environment variables
-    const baseId = process.env.AIRTABLE_BASE_ID;
-    const apiKey = process.env.AIRTABLE_API_KEY;
+    const baseId = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID;
+    const apiKey = process.env.NEXT_PUBLIC_AIRTABLE_API_KEY;
 
     if (!baseId || !apiKey) {
       console.error('Missing required Airtable environment variables');

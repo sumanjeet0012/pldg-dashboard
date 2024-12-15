@@ -128,12 +128,71 @@ function calculateTechPartnerMetrics(data: EngagementData[]) {
 function calculateTechPartnerPerformance(data: EngagementData[]) {
   return _(data)
     .groupBy('Which Tech Partner')
-    .map((items, partner) => ({
-      partner,
-      issues: _.sumBy(items, item => 
-        parseInt(item['How many issues, PRs, or projects this week?'] || '0')
-      )
-    }))
+    .flatMap((items, partner) => {
+      // Skip empty partner entries
+      if (!partner || partner === '[]') return [];
+
+      // Calculate time series data
+      const timeSeriesData = _(items)
+        .groupBy('Program Week')
+        .map((weekItems, week) => ({
+          week: formatWeekString(week),
+          issueCount: _.sumBy(weekItems, item =>
+            parseInt(item['How many issues, PRs, or projects this week?'] || '0')
+          ),
+          contributors: Array.from(new Set(weekItems.map(item => item.Name))),
+          engagementLevel: _.meanBy(weekItems, item => {
+            const participation = item['Engagement Participation ']?.trim() || '';
+            return participation.startsWith('3') ? 3 :
+                   participation.startsWith('2') ? 2 :
+                   participation.startsWith('1') ? 1 : 0;
+          })
+        }))
+        .orderBy(item => parseWeekNumber(item.week))
+        .value();
+
+      // Calculate contributor details
+      const contributorDetails = _(items)
+        .groupBy('Name')
+        .map((contribItems, name) => ({
+          name,
+          githubUsername: name.toLowerCase().replace(/\s+/g, '-'),
+          issuesCompleted: _.sumBy(contribItems, item =>
+            parseInt(item['How many issues, PRs, or projects this week?'] || '0')
+          ),
+          engagementScore: _.meanBy(contribItems, item => {
+            const participation = item['Engagement Participation ']?.trim() || '';
+            return participation.startsWith('3') ? 3 :
+                   participation.startsWith('2') ? 2 :
+                   participation.startsWith('1') ? 1 : 0;
+          })
+        }))
+        .value();
+
+      // Calculate collaboration metrics
+      const collaborationMetrics = {
+        weeklyParticipation: items.filter(item =>
+          item['Tech Partner Collaboration?'] === 'Yes'
+        ).length / items.length * 100,
+        additionalCalls: Array.from(new Set(
+          items.filter(item => item['PLDG Feedback'])
+               .map(item => item['PLDG Feedback'])
+        )),
+        feedback: items.filter(item => item['PLDG Feedback'])
+                      .map(item => item['PLDG Feedback'])
+                      .join('\n')
+      };
+
+      return [{
+        partner,
+        issues: _.sumBy(items, item =>
+          parseInt(item['How many issues, PRs, or projects this week?'] || '0')
+        ),
+        timeSeriesData,
+        contributorDetails,
+        collaborationMetrics
+      }];
+    })
     .value();
 }
 
@@ -297,7 +356,8 @@ export function processData(
       newContributors: activeContributorsCount,
       returningContributors: 0,
       totalActive: activeContributorsCount
-    }]
+    }],
+    rawEngagementData: airtableData // Add this line to include raw data
   };
 
   console.log('Processing complete:', {

@@ -12,9 +12,18 @@ import { LoadingSpinner } from '../ui/loading';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
 import { RefreshCw } from 'lucide-react';
+import { enhanceTechPartnerData } from '@/lib/utils';
 
 export default function DeveloperEngagementDashboard() {
   const { data, isLoading, isError, refresh, lastUpdated, isFetching } = useDashboardSystemContext();
+  const [viewMode, setViewMode] = React.useState<'timeline' | 'contributors' | 'collaboration'>('timeline');
+
+  const enhancedTechPartnerData = React.useMemo(() =>
+    data?.techPartnerPerformance && data?.rawEngagementData
+      ? enhanceTechPartnerData(data.techPartnerPerformance, data.rawEngagementData)
+      : [],
+    [data?.techPartnerPerformance, data?.rawEngagementData]
+  );
 
   React.useEffect(() => {
     console.log('Dashboard State:', {
@@ -23,16 +32,16 @@ export default function DeveloperEngagementDashboard() {
         contributors: data.activeContributors,
         techPartners: data.programHealth.activeTechPartners,
         engagementTrends: data.engagementTrends.length,
-        technicalProgress: data.technicalProgress.length
+        technicalProgress: data.technicalProgress.length,
+        techPartnerData: enhancedTechPartnerData
       } : null,
       isLoading,
       isError,
       isFetching,
       lastUpdated: new Date(lastUpdated).toISOString()
     });
-  }, [data, isLoading, isError, isFetching, lastUpdated]);
+  }, [data, isLoading, isError, isFetching, lastUpdated, enhancedTechPartnerData]);
 
-  // Only show loading spinner during initial load
   if (!data && isLoading) {
     return (
       <div className="container mx-auto p-4">
@@ -113,7 +122,11 @@ export default function DeveloperEngagementDashboard() {
       {/* Full Width Sections */}
       <div className="space-y-8">
         {/* Tech Partner Overview */}
-        <TechPartnerChart data={data.techPartnerPerformance} />
+        <TechPartnerChart
+          data={enhancedTechPartnerData}
+          viewMode={viewMode}
+          onViewChange={setViewMode}
+        />
 
         {/* Top Contributors */}
         <Card>

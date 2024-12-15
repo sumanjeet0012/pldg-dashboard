@@ -21,12 +21,18 @@ interface ContributorWithDetails {
 }
 
 export function ContributorView({ data }: ContributorViewProps) {
+  React.useEffect(() => {
+    console.log('ContributorView data:', {
+      hasData: !!data?.length,
+      dataCount: data?.length,
+      contributorDetails: data?.[0]?.contributorDetails,
+    });
+  }, [data]);
+
   const contributors = data.flatMap(partner =>
     partner.contributorDetails.map(contributor => ({
       ...contributor,
-      partner: partner.partner,
-      email: contributor.email || undefined,
-      recentIssues: contributor.recentIssues || []
+      partner: partner.partner
     }))
   );
 
