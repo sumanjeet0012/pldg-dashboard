@@ -12,7 +12,7 @@ export interface ActionItem {
 export interface EngagementData {
   Name: string;
   'Program Week': string;
-  'Engagement Participation ': string;
+  'Engagement Participation '?: string;
   'Tech Partner Collaboration?': string;
   'Which Tech Partner': string | string[];
   'How many issues, PRs, or projects this week?': string;
@@ -26,6 +26,29 @@ export interface EngagementData {
   'Engagement Tracking'?: string;
   'Describe your work with the tech partner'?: string;
   'Did you work on an issue, PR, or project this week?'?: string;
+  'GitHub Issue Title'?: string;
+  'GitHub Issue URL'?: string;
+  'Issue Status'?: 'Open' | 'Closed';
+  'Engagement Level'?: string;
+  'Additional Notes'?: string;
+  'Feedback Sentiment'?: string;
+  'Technical Progress'?: string;
+  'Collaboration Score'?: string;
+  'Overall Impact'?: string;
+  [key: string]: string | undefined;
+}
+
+export interface IssueResult {
+  title: string;
+  link: string;
+  status: string;
+  engagement: number;
+  week: string;
+}
+
+export interface IssueHighlight {
+  title: string;
+  url: string;
 }
 
 export interface IssueMetrics {
@@ -84,7 +107,7 @@ export interface TechPartnerFilter {
   weeks: string[]; // Chronologically ordered weeks 1-12
 }
 
-export interface IssueHighlight {
+export interface ActionableInsight {
   type: 'success' | 'warning';
   title: string;
   description: string;
@@ -108,7 +131,8 @@ export interface EnhancedTechPartnerData extends TechPartnerPerformance {
   }[];
   contributorDetails: ContributorDetails[];
   issueTracking: IssueTracking[];
-  highlightedIssues?: IssueHighlight[];
+  mostActiveIssue: { title: string; url: string };
+  staleIssue: { title: string; url: string };
 }
 
 export interface EngagementTrend {

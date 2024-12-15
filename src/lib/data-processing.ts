@@ -1,11 +1,10 @@
-import { 
-  ProcessedData, 
-  EngagementData, 
-  GitHubData, 
-  ActionItem, 
-  IssueMetrics 
-} from '@/types/dashboard';
 import _ from 'lodash';
+import {
+  EngagementData, ProcessedData, TechPartnerMetrics,
+  TechPartnerPerformance, ContributorDetails, IssueResult,
+  IssueHighlight, EnhancedTechPartnerData, ActionItem,
+  GitHubData, IssueMetrics
+} from '@/types/dashboard';
 
 // Helper function to parse tech partners consistently
 function parseTechPartners(techPartner: string | string[]): string[] {
@@ -114,7 +113,7 @@ function calculateTechPartnerMetrics(data: EngagementData[]) {
     .groupBy('Which Tech Partner')
     .map((items, partner) => ({
       partner,
-      totalIssues: _.sumBy(items, item => 
+      totalIssues: _.sumBy(items, item =>
         parseInt(item['How many issues, PRs, or projects this week?'] || '0')
       ),
       activeContributors: new Set(items.map(item => item.Name)).size,
@@ -169,19 +168,32 @@ function calculateTechPartnerPerformance(data: EngagementData[]) {
         }))
         .value();
 
-      // Calculate collaboration metrics
-      const collaborationMetrics = {
-        weeklyParticipation: items.filter(item =>
-          item['Tech Partner Collaboration?'] === 'Yes'
-        ).length / items.length * 100,
-        additionalCalls: Array.from(new Set(
-          items.filter(item => item['PLDG Feedback'])
-               .map(item => item['PLDG Feedback'])
-        )),
-        feedback: items.filter(item => item['PLDG Feedback'])
-                      .map(item => item['PLDG Feedback'])
-                      .join('\n')
-      };
+      // Find most active and stale issues
+      const issueTracking: IssueResult[] = items.map(item => ({
+        title: item['GitHub Issue Title'] || '',
+        link: item['GitHub Issue URL'] || '',
+        status: item['Issue Status']?.toLowerCase() === 'closed' ? 'closed' : 'open',
+        engagement: item['Engagement Participation ']?.trim().startsWith('3') ? 3 :
+                   item['Engagement Participation ']?.trim().startsWith('2') ? 2 :
+                   item['Engagement Participation ']?.trim().startsWith('1') ? 1 : 0,
+        week: formatWeekString(item['Program Week'])
+      })).filter(issue => issue.title && issue.link);
+
+      const activeIssue = _(issueTracking)
+        .orderBy(['engagement'], ['desc'])
+        .head();
+
+      const staleIssueResult = _(issueTracking)
+        .filter(issue => issue.status === 'open' && issue.engagement < 1)
+        .head();
+
+      const mostActiveIssue: IssueHighlight = activeIssue
+        ? { title: activeIssue.title, url: activeIssue.link }
+        : { title: 'No active issues', url: '' };
+
+      const staleIssue: IssueHighlight = staleIssueResult
+        ? { title: staleIssueResult.title, url: staleIssueResult.link }
+        : { title: 'No stale issues', url: '' };
 
       return [{
         partner,
@@ -190,7 +202,15 @@ function calculateTechPartnerPerformance(data: EngagementData[]) {
         ),
         timeSeriesData,
         contributorDetails,
-        collaborationMetrics
+        issueTracking,
+        mostActiveIssue: {
+          title: mostActiveIssue.title,
+          url: mostActiveIssue.url
+        },
+        staleIssue: {
+          title: staleIssue.title,
+          url: staleIssue.url
+        }
       }];
     })
     .value();
