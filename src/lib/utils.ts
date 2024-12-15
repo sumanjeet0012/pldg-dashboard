@@ -569,44 +569,8 @@ function processContributorDetails(engagementData: EngagementData[]): Contributo
   }));
 }
 
-function processCollaborationMetrics(engagementData: EngagementData[]) {
-  console.log('processCollaborationMetrics: Starting', {
-    dataCount: engagementData.length,
-    sampleEntry: engagementData[0]
-  });
 
-  const partnerData = engagementData.map(item => ({
-    hasCollaboration: item['Tech Partner Collaboration?'] === 'Yes',
-    additionalCalls: item['Which session(s) did you find most informative or impactful, and why?'] || '',
-    feedback: item['PLDG Feedback'] || ''
-  }));
 
-  const activeEntries = partnerData.filter(item =>
-    item.hasCollaboration || item.additionalCalls || item.feedback
-  );
-
-  const result = {
-    weeklyParticipation: activeEntries.length / Math.max(partnerData.length, 1) * 100,
-    additionalCalls: Array.from(new Set(
-      partnerData
-        .filter(item => item.additionalCalls)
-        .map(item => item.additionalCalls)
-        .filter((call): call is string => typeof call === 'string' && call.length > 0)
-    )),
-    feedback: partnerData
-      .filter(item => item.feedback)
-      .map(item => item.feedback)
-      .join('\n')
-  };
-
-  console.log('processCollaborationMetrics: Complete', {
-    activeCount: activeEntries.length,
-    totalCount: partnerData.length,
-    result
-  });
-
-  return result;
-}
 
 export function enhanceTechPartnerData(
   baseData: TechPartnerPerformance[] | undefined,
