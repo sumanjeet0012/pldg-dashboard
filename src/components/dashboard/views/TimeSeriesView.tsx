@@ -16,12 +16,14 @@ interface CustomTooltipProps {
 }
 
 const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
-  if (!active || !payload?.length) return null;
+  if (!active || !payload?.length || !label) return null;
+
+  const weekNumber = label.replace(/Week Week/, 'Week');
 
   return (
     <Card className="p-3 bg-white/95 shadow-lg border-0">
       <div className="space-y-2">
-        <div className="font-medium">Week {label}</div>
+        <div className="font-medium">{weekNumber}</div>
         <div className="grid gap-1 text-sm">
           {payload.map((entry, index) => (
             <div key={index} className="flex items-center gap-2">
@@ -42,41 +44,58 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
 
 export function TimeSeriesView({ data }: TimeSeriesViewProps) {
   const chartData = React.useMemo(() => {
-    // Get all unique weeks
+    if (!data?.length) return [];
+
+    // Get all unique weeks and format them
     const allWeeks = new Set<string>();
     data.forEach(partner => {
       partner.timeSeriesData.forEach(ts => {
-        allWeeks.add(ts.week);
+        if (ts.week) {
+          // Extract just the week number
+          const weekNum = ts.week.match(/Week (\d+)/)?.[1];
+          if (weekNum) allWeeks.add(`Week ${weekNum}`);
+        }
       });
     });
 
     // Sort weeks by number
     const sortedWeeks = Array.from(allWeeks).sort((a, b) => {
-      const weekA = parseInt(a.match(/\d+/)?.[0] || '0');
-      const weekB = parseInt(b.match(/\d+/)?.[0] || '0');
+      const weekA = parseInt(a.match(/\d+/)?.[1] || '0');
+      const weekB = parseInt(b.match(/\d+/)?.[1] || '0');
       return weekA - weekB;
     });
 
     // Create data points for each week
-    return sortedWeeks.map(week => {
-      const point: Record<string, any> = { week };
+    return sortedWeeks.map(weekLabel => {
+      const point: Record<string, any> = { week: weekLabel };
+      
+      // Process each partner's data for this week
       data.forEach(partner => {
-        const weekData = partner.timeSeriesData.find(ts => ts.week === week);
+        // Find matching week data by comparing week numbers
+        const weekData = partner.timeSeriesData.find(ts => {
+          const tsWeekNum = ts.week.match(/Week (\d+)/)?.[1];
+          const currentWeekNum = weekLabel.match(/Week (\d+)/)?.[1];
+          return tsWeekNum === currentWeekNum;
+        });
+
+        // Add the issue count for this partner
         point[partner.partner] = weekData?.issueCount || 0;
       });
+
       return point;
     });
   }, [data]);
 
-  // Add debug logging
+  // Debug logging
   React.useEffect(() => {
-    console.log('TimeSeriesView Data:', {
-      rawData: data,
-      processedData: chartData,
-      weekCount: chartData.length,
-      partners: data.map(p => p.partner)
-    });
-  }, [data, chartData]);
+    console.log('Chart Data:', chartData);
+  }, [chartData]);
+
+  if (!chartData.length) {
+    return <div className="h-[400px] w-full flex items-center justify-center text-gray-500">
+      No data available
+    </div>;
+  }
 
   const COLORS = {
     'Libp2p': '#3B82F6',
@@ -91,42 +110,30 @@ export function TimeSeriesView({ data }: TimeSeriesViewProps) {
   return (
     <div className="h-[400px] w-full">
       <ResponsiveContainer>
-        <BarChart
-          data={chartData}
-          margin={{ top: 20, right: 40, left: 20, bottom: 30 }}
-        >
-          <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+        <BarChart data={chartData}>
+          <CartesianGrid strokeDasharray="3 3" />
           <XAxis 
             dataKey="week"
-            tickFormatter={(value) => `Week ${value}`}
             tick={{ fontSize: 12 }}
-            height={60}
           />
           <YAxis 
+            tick={{ fontSize: 12 }}
             label={{ 
               value: 'Issues', 
               angle: -90, 
               position: 'insideLeft',
               style: { textAnchor: 'middle' }
             }}
-            width={60}
           />
           <Tooltip content={<CustomTooltip />} />
-          <Legend 
-            verticalAlign="bottom" 
-            height={48}
-            wrapperStyle={{
-              paddingTop: '20px'
-            }}
-          />
-          
-          {data.map((partner) => (
+          <Legend />
+          {Object.entries(COLORS).map(([partner, color]) => (
             <Bar
-              key={partner.partner}
-              dataKey={partner.partner}
-              name={partner.partner}
-              stackId="issues"
-              fill={COLORS[partner.partner as keyof typeof COLORS] || '#CBD5E1'}
+              key={partner}
+              dataKey={partner}
+              fill={color}
+              stackId="stack"
+              name={partner} // Add name for tooltip
             />
           ))}
         </BarChart>

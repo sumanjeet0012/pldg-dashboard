@@ -12,6 +12,8 @@ interface ContributorViewProps {
 
 export function ContributorView({ data }: ContributorViewProps) {
   const contributors = React.useMemo(() => {
+    if (!data?.length) return [];
+
     const contributorMap = new Map<string, {
       name: string;
       githubUsername: string;
@@ -22,50 +24,46 @@ export function ContributorView({ data }: ContributorViewProps) {
         title: string;
         url: string;
         week: string;
-        partner: string;
       }>;
     }>();
 
-    // Process all partners' data
     data.forEach(partner => {
       partner.timeSeriesData.forEach(weekData => {
         weekData.contributors.forEach(name => {
-          const key = name;
-          if (!contributorMap.has(key)) {
-            contributorMap.set(key, {
+          if (!contributorMap.has(name)) {
+            const details = partner.contributorDetails.find(d => d.name === name);
+            contributorMap.set(name, {
               name,
-              githubUsername: '',
-              techPartners: new Set([partner.partner]),
+              githubUsername: details?.githubUsername || name.toLowerCase().replace(/\s+/g, '-'),
+              techPartners: new Set(),
               totalIssues: 0,
               engagement: 0,
               contributions: []
             });
           }
-
-          const contributor = contributorMap.get(key)!;
+          const contributor = contributorMap.get(name)!;
           contributor.techPartners.add(partner.partner);
           
-          // Add issues from this week
+          const uniqueIssuesThisWeek = new Set(weekData.issues
+            .filter(issue => issue.contributor === name)
+            .map(issue => issue.url)
+          ).size;
+          contributor.totalIssues += uniqueIssuesThisWeek;
+          
+          contributor.engagement = Math.max(contributor.engagement, weekData.engagementLevel);
+          
           weekData.issues.forEach(issue => {
-            if (issue.contributor === name) {
+            if (issue.contributor === name && 
+                !contributor.contributions.some(c => c.url === issue.url)) {
               contributor.contributions.push({
                 title: issue.title,
                 url: issue.url,
-                week: weekData.week,
-                partner: partner.partner
+                week: weekData.week
               });
-              contributor.totalIssues++;
             }
           });
         });
       });
-    });
-
-    // Add debug logging
-    console.log('ContributorView Processing:', {
-      rawData: data,
-      processedContributors: Array.from(contributorMap.values()),
-      contributorCount: contributorMap.size
     });
 
     return Array.from(contributorMap.values())
@@ -119,8 +117,6 @@ export function ContributorView({ data }: ContributorViewProps) {
                                   <span className="font-medium">{contribution.title}</span>
                                 </a>
                                 <div className="flex items-center gap-2 text-xs text-gray-500">
-                                  <span>{contribution.partner}</span>
-                                  <span>•</span>
                                   <span>{contribution.week}</span>
                                 </div>
                               </li>

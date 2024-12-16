@@ -299,9 +299,34 @@ export function combineAndPrioritize(insights1: string[] = [], insights2: string
 
 // Calculate engagement score based on engagement trends and NPS
 export function calculateEngagementScore(data: ProcessedData): number {
+  // Get the most recent week's data
   const recentEngagement = data.engagementTrends[data.engagementTrends.length - 1];
-  const engagementRate = (recentEngagement['High Engagement'] / recentEngagement.total) * 100;
-  return Math.round((engagementRate + data.programHealth.npsScore) / 2);
+  
+  if (!recentEngagement) {
+    console.warn('No engagement data available for score calculation');
+    return 0;
+  }
+
+  // Calculate engagement rate based on active contributors
+  // Compare to the average number of contributors across all weeks
+  const averageContributors = data.engagementTrends.reduce((sum, week) => sum + week.total, 0) / 
+    data.engagementTrends.length;
+  
+  const engagementRate = (recentEngagement.total / averageContributors) * 100;
+
+  // Combine with NPS score for overall health metric
+  const score = Math.round((engagementRate + data.programHealth.npsScore) / 2);
+
+  // Debug logging
+  console.log('Engagement Score Calculation:', {
+    recentWeekTotal: recentEngagement.total,
+    averageContributors,
+    engagementRate,
+    npsScore: data.programHealth.npsScore,
+    finalScore: score
+  });
+
+  return score;
 }
 
 // Calculate collaboration index based on tech partner interactions
@@ -542,67 +567,44 @@ function processIssueData(items: EngagementData[]): number {
   );
 }
 
+// Add type for issue status
+type IssueStatus = 'open' | 'closed';
+
 // Helper functions for enhanced tech partner data processing
 function processTimeSeriesData(engagementData: EngagementData[]): EnhancedTechPartnerData['timeSeriesData'] {
   const weeklyData = _.groupBy(engagementData, 'Program Week');
 
   return Object.entries(weeklyData)
     .map(([week, entries]) => {
-      // Extract week number and validate it
-      const weekNumber = parseInt(week.replace(/\D/g, ''));
-      if (isNaN(weekNumber) || weekNumber < 1 || weekNumber > 52) {
-        console.warn(`Invalid week number found: ${week}, using current date`);
-        return {
-          week,
-          weekEndDate: new Date().toISOString(),
-          issueCount: 0,
-          contributors: [],
-          engagementLevel: 0,
-          issues: []
-        };
-      }
-
-      // Calculate week end date safely
-      const currentDate = new Date();
-      const weekEndDate = new Date(currentDate);
-      weekEndDate.setDate(currentDate.getDate() - ((weekNumber - 1) * 7));
-
-      const issues = entries
-        .filter(entry => entry['GitHub Issue Title'] && entry['GitHub Issue URL'])
-        .map(entry => {
-          const status = entry['Issue Status'];
-          const statusStr = Array.isArray(status) ? status[0] : status;
-          const title = Array.isArray(entry['GitHub Issue Title']) ? entry['GitHub Issue Title'][0] : String(entry['GitHub Issue Title']);
-          const url = Array.isArray(entry['GitHub Issue URL']) ? entry['GitHub Issue URL'][0] : String(entry['GitHub Issue URL']);
-          return {
-            title: title || '',
-            url: url || '',
-            status: (statusStr?.toLowerCase() === 'closed' ? 'closed' : 'open') as 'open' | 'closed',
-            lastUpdated: new Date().toISOString(),
-            contributor: entry.Name
-          };
-        });
-
+      // Don't try to calculate dates, just use the week string as is
       return {
         week,
-        weekEndDate: weekEndDate.toISOString(),
+        weekEndDate: new Date().toISOString(), // This is just for type satisfaction
         issueCount: _.sumBy(entries, entry =>
           parseInt(entry['How many issues, PRs, or projects this week?'] || '0')
         ),
         contributors: Array.from(new Set(entries.map(entry => entry.Name))),
         engagementLevel: _.meanBy(entries, entry => {
           const participation = entry['Engagement Participation ']?.trim() || '';
-          return participation.startsWith('3') ? 3 :
-                 participation.startsWith('2') ? 2 :
-                 participation.startsWith('1') ? 1 : 0;
+          return participation.includes('3 -') ? 3 :
+                 participation.includes('2 -') ? 2 :
+                 participation.includes('1 -') ? 1 : 0;
         }),
-        issues
+        issues: entries
+          .filter(entry => entry['Issue Title 1'] && entry['Issue Link 1'])
+          .map(entry => ({
+            title: String(entry['Issue Title 1']),
+            url: String(entry['Issue Link 1']),
+            status: 'open' as IssueStatus, // Explicitly type the status
+            lastUpdated: new Date().toISOString(),
+            contributor: entry.Name
+          }))
       };
     })
     .sort((a, b) => {
-      // Sort by week number for chronological order
-      const weekA = parseInt(a.week.replace(/\D/g, '')) || 0;
-      const weekB = parseInt(b.week.replace(/\D/g, '')) || 0;
+      // Sort by week number
+      const weekA = parseInt(a.week.match(/Week (\d+)/)?.[1] || '0');
+      const weekB = parseInt(b.week.match(/Week (\d+)/)?.[1] || '0');
       return weekA - weekB;
     });
 }
