@@ -37,15 +37,20 @@ export async function processEngagementData(rawData: EngagementData[]): Promise<
     }));
 
   // Process tech partner performance
-  const techPartnerPerformance = _(sortedData)
-    .groupBy('Which Tech Partner')
-    .map((items, partner) => ({
-      partner,
-      issues: _.sumBy(items, item => 
-        parseInt(item['How many issues, PRs, or projects this week?'] || '0')
-      )
-    }))
-    .value();
+  const techPartnerPerformance = Array.from(new Set(sortedData.map(item => item['Which Tech Partner']))).map(partner => {
+    const partnerStr = Array.isArray(partner) ? partner[0] : partner;
+    const partnerData = sortedData.filter(item => {
+      const techPartner = item['Which Tech Partner'];
+      return Array.isArray(techPartner) ? techPartner[0] === partnerStr : techPartner === partnerStr;
+    });
+    return {
+      partner: partnerStr,
+      issues: partnerData.reduce((sum, item) =>
+        sum + parseInt(item['How many issues, PRs, or projects this week?'] || '0'), 0),
+      timeSeriesData: [],  // Will be populated later in enhanceTechPartnerData
+      contributorDetails: [] // Will be populated later in enhanceTechPartnerData
+    };
+  });
 
   // Process tech partner metrics
   const techPartnerMetrics = _(sortedData)
@@ -63,13 +68,25 @@ export async function processEngagementData(rawData: EngagementData[]): Promise<
 
   // Process feedback sentiment
   const feedbackSentiment = {
-    positive: sortedData.filter(e => e['PLDG Feedback']?.toLowerCase().includes('great') || 
-                                   e['PLDG Feedback']?.toLowerCase().includes('good')).length,
-    neutral: sortedData.filter(e => e['PLDG Feedback'] && 
-                                  !e['PLDG Feedback'].toLowerCase().includes('great') && 
-                                  !e['PLDG Feedback'].toLowerCase().includes('good') &&
-                                  !e['PLDG Feedback'].toLowerCase().includes('bad')).length,
-    negative: sortedData.filter(e => e['PLDG Feedback']?.toLowerCase().includes('bad')).length
+    positive: sortedData.filter(e => {
+      const feedback = e['PLDG Feedback'];
+      const feedbackStr = Array.isArray(feedback) ? feedback[0] : feedback;
+      return typeof feedbackStr === 'string' &&
+        (feedbackStr.toLowerCase().includes('great') || feedbackStr.toLowerCase().includes('good'));
+    }).length,
+    neutral: sortedData.filter(e => {
+      const feedback = e['PLDG Feedback'];
+      const feedbackStr = Array.isArray(feedback) ? feedback[0] : feedback;
+      return typeof feedbackStr === 'string' &&
+        !feedbackStr.toLowerCase().includes('great') &&
+        !feedbackStr.toLowerCase().includes('good') &&
+        !feedbackStr.toLowerCase().includes('bad');
+    }).length,
+    negative: sortedData.filter(e => {
+      const feedback = e['PLDG Feedback'];
+      const feedbackStr = Array.isArray(feedback) ? feedback[0] : feedback;
+      return typeof feedbackStr === 'string' && feedbackStr.toLowerCase().includes('bad');
+    }).length
   };
 
   // Process technical progress
@@ -133,10 +150,12 @@ export async function processEngagementData(rawData: EngagementData[]): Promise<
     sum + parseInt(entry['How many issues, PRs, or projects this week?'] || '0'), 0
   );
 
-  const positiveFeedback = sortedData.filter(entry => 
-    entry['PLDG Feedback']?.toLowerCase().includes('great') || 
-    entry['PLDG Feedback']?.toLowerCase().includes('good')
-  ).length;
+  const positiveFeedback = sortedData.filter(entry => {
+    const feedback = entry['PLDG Feedback'];
+    const feedbackStr = Array.isArray(feedback) ? feedback[0] : feedback;
+    return typeof feedbackStr === 'string' &&
+      (feedbackStr.toLowerCase().includes('great') || feedbackStr.toLowerCase().includes('good'));
+  }).length;
 
   // Calculate weekly change
   const currentWeekData = sortedData.filter(entry => 
@@ -469,14 +488,17 @@ function calculateEngagementRate(data: EngagementData[]): number {
 
 function calculateNPSScore(data: EngagementData[]): number {
   const scores = data
-    .map(entry => parseInt(entry['How likely are you to recommend the PLDG to others?'] || '0'))
+    .map(entry => {
+      const score = entry['How likely are you to recommend the PLDG to others?'];
+      return parseInt(Array.isArray(score) ? score[0] || '0' : score || '0');
+    })
     .filter(score => score > 0);
 
   if (scores.length === 0) return 0;
 
   const promoters = scores.filter(score => score >= 9).length;
   const detractors = scores.filter(score => score <= 6).length;
-  
+
   return Math.round(((promoters - detractors) / scores.length) * 100);
 }
 
@@ -503,11 +525,15 @@ function processEngagementLevels(items: EngagementData[]) {
 function processCollaborationDetails(items: EngagementData[]) {
   return items
     .filter(item => item['Tech Partner Collaboration?'] === 'Yes')
-    .map(item => ({
-      description: item['Describe your work with the tech partner'] || '',
-      additionalCalls: item['Which session(s) did you find most informative or impactful, and why?']?.split(',').map(s => s.trim()) || [],
-      weeklyFeedback: item['PLDG Feedback'] || ''
-    }));
+    .map(item => {
+      const sessions = item['Which session(s) did you find most informative or impactful, and why?'];
+      const sessionStr = Array.isArray(sessions) ? sessions[0] : sessions;
+      return {
+        description: item['Describe your work with the tech partner'] || '',
+        additionalCalls: sessionStr ? sessionStr.split(',').map(s => s.trim()) : [],
+        weeklyFeedback: Array.isArray(item['PLDG Feedback']) ? item['PLDG Feedback'][0] : (item['PLDG Feedback'] || '')
+      };
+    });
 }
 
 function processIssueData(items: EngagementData[]): number {
@@ -543,12 +569,19 @@ function processTimeSeriesData(engagementData: EngagementData[]): EnhancedTechPa
 
       const issues = entries
         .filter(entry => entry['GitHub Issue Title'] && entry['GitHub Issue URL'])
-        .map(entry => ({
-          title: entry['GitHub Issue Title'] || '',
-          url: entry['GitHub Issue URL'] || '',
-          status: (entry['Issue Status']?.toLowerCase() === 'closed' ? 'closed' : 'open') as 'open' | 'closed',
-          lastUpdated: new Date().toISOString() // TODO: Get actual last updated from GitHub API
-        }));
+        .map(entry => {
+          const status = entry['Issue Status'];
+          const statusStr = Array.isArray(status) ? status[0] : status;
+          const title = Array.isArray(entry['GitHub Issue Title']) ? entry['GitHub Issue Title'][0] : String(entry['GitHub Issue Title']);
+          const url = Array.isArray(entry['GitHub Issue URL']) ? entry['GitHub Issue URL'][0] : String(entry['GitHub Issue URL']);
+          return {
+            title: title || '',
+            url: url || '',
+            status: (statusStr?.toLowerCase() === 'closed' ? 'closed' : 'open') as 'open' | 'closed',
+            lastUpdated: new Date().toISOString(),
+            contributor: entry.Name
+          };
+        });
 
       return {
         week,
@@ -583,27 +616,47 @@ function processContributorDetails(engagementData: EngagementData[]): Contributo
     contributorMap.set(entry.Name, entries);
   });
 
-  return Array.from(contributorMap.entries()).map(([name, entries]) => ({
-    name,
-    githubUsername: entries[0]['Github Username'] || name.toLowerCase().replace(/\s+/g, '-'),
-    email: entries[0]['Email Address'],
-    issuesCompleted: _.sumBy(entries, entry =>
-      parseInt(entry['How many issues, PRs, or projects this week?'] || '0')
-    ),
-    engagementScore: _.meanBy(entries, entry => {
+  return Array.from(contributorMap.entries()).map(([name, entries]) => {
+    const email = entries[0]['Email Address'];
+    const emailStr = Array.isArray(email) ? email[0] : email;
+
+    // Calculate issues completed
+    const issuesCompleted = entries.reduce((sum: number, entry) => {
+      const issueCount = entry['How many issues, PRs, or projects this week?'];
+      return sum + (typeof issueCount === 'string' ? parseInt(issueCount || '0') : 0);
+    }, 0);
+
+    // Calculate engagement score
+    const engagementScore = entries.reduce((sum: number, entry) => {
       const participation = entry['Engagement Participation ']?.trim() || '';
-      return participation.startsWith('3') ? 3 :
-             participation.startsWith('2') ? 2 :
-             participation.startsWith('1') ? 1 : 0;
-    }),
-    recentIssues: entries
+      return sum + (participation.startsWith('3') ? 3 :
+                   participation.startsWith('2') ? 2 :
+                   participation.startsWith('1') ? 1 : 0);
+    }, 0) / entries.length;
+
+    // Process recent issues
+    const recentIssues = entries
       .filter(entry => entry['GitHub Issue Title'] && entry['GitHub Issue URL'])
-      .map(entry => ({
-        title: entry['GitHub Issue Title'] || '',
-        link: entry['GitHub Issue URL'],
-        description: entry['Describe your work with the tech partner']
-      }))
-  }));
+      .map(entry => {
+        const title = entry['GitHub Issue Title'];
+        const link = entry['GitHub Issue URL'];
+        const description = entry['Describe your work with the tech partner'];
+        return {
+          title: Array.isArray(title) ? title[0] || '' : title || '',
+          link: Array.isArray(link) ? link[0] : link,
+          description: Array.isArray(description) ? description[0] || '' : description || ''
+        };
+      });
+
+    return {
+      name,
+      githubUsername: entries[0]['Github Username'] || name.toLowerCase().replace(/\s+/g, '-'),
+      email: emailStr || '',
+      issuesCompleted,
+      engagementScore,
+      recentIssues
+    };
+  });
 }
 
 
@@ -672,7 +725,8 @@ export function enhanceTechPartnerData(
         link: issue.url,
         status: issue.status,
         engagement: 0,
-        week: week.week
+        week: week.week,
+        contributor: issue.contributor
       }))),
       mostActiveIssue: mostRecentIssue
         ? { title: mostRecentIssue.title, url: mostRecentIssue.url }
