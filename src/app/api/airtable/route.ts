@@ -7,9 +7,9 @@ export async function GET() {
     // Validate environment variables
     const baseId = process.env.AIRTABLE_BASE_ID;
     const apiKey = process.env.AIRTABLE_API_KEY;
-    const tableId = process.env.AIRTABLE_TABLE_ID || 'tblG6uoKbtsCtMBZV';
+    const tableName = process.env.AIRTABLE_TABLE_NAME;
 
-    if (!baseId || !apiKey) {
+    if (!baseId || !apiKey || !tableName) {
       console.error('Missing required Airtable environment variables');
       return NextResponse.json(
         { error: 'Airtable configuration missing' },
@@ -17,8 +17,9 @@ export async function GET() {
       );
     }
 
+    // Use the table name from environment variables instead of hardcoded ID
     const response = await fetch(
-      `https://api.airtable.com/v0/${baseId}/${tableId}`,
+      `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}`,
       {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
@@ -41,14 +42,10 @@ export async function GET() {
         statusText: response.statusText,
         error: errorText,
         baseId,
-        tableId,
-        requestUrl: `https://api.airtable.com/v0/${baseId}/${tableId}`
+        tableName,
+        requestUrl: `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}`
       });
-      return NextResponse.json({
-        error: `Airtable API error: ${response.statusText} - ${errorText}`,
-        status: response.status,
-        statusText: response.statusText
-      }, { status: response.status });
+      throw new Error(`Airtable API error: ${response.statusText}`);
     }
 
     const data = await response.json();

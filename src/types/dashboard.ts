@@ -11,30 +11,18 @@ export interface ActionItem {
 
 export interface EngagementData {
   Name: string;
+  'Github Username'?: string;
   'Program Week': string;
   'Engagement Participation '?: string;
   'Tech Partner Collaboration?': string;
-  'Which Tech Partner': string[];
+  'Which Tech Partner': string | string[];
   'How many issues, PRs, or projects this week?': string;
-  'How likely are you to recommend the PLDG to others?': string;
-  'PLDG Feedback'?: string;
-  'Issue Title 1'?: string;
-  'Issue Link 1'?: string;
-  'Which session(s) did you find most informative or impactful, and why?'?: string;
-  'Github Username'?: string;
-  'Email Address'?: string;
-  'Engagement Tracking'?: string;
-  'Describe your work with the tech partner'?: string;
-  'Did you work on an issue, PR, or project this week?'?: string;
-  'GitHub Issue Title'?: string;
-  'GitHub Issue URL'?: string;
-  'Issue Status'?: 'Open' | 'Closed';
-  'Engagement Level'?: string;
-  'Additional Notes'?: string;
-  'Feedback Sentiment'?: string;
-  'Technical Progress'?: string;
-  'Collaboration Score'?: string;
-  'Overall Impact'?: string;
+  'Issue Title 1'?: string | string[];
+  'Issue Link 1'?: string | string[];
+  'Issue Title 2'?: string | string[];
+  'Issue Link 2'?: string | string[];
+  'Issue Title 3'?: string | string[];
+  'Issue Link 3'?: string | string[];
   [key: string]: string | string[] | undefined;
 }
 
@@ -86,6 +74,25 @@ export interface TechPartnerMetrics {
 
 export interface TechPartnerPerformance {
   partner: string;
+  timeSeriesData: Array<{
+    week: string;
+    weekEndDate: string;
+    issueCount: number;
+    contributors: string[];
+    engagementLevel: number;
+    issues: Array<{
+      title: string;
+      url: string;
+      status: string;
+      lastUpdated: string;
+    }>;
+  }>;
+  contributorDetails: Array<{
+    name: string;
+    githubUsername: string;
+    issuesCompleted: number;
+    engagementScore: number;
+  }>;
   issues: number;
 }
 

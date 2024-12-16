@@ -15,9 +15,35 @@ interface TechPartnerChartProps {
   data: EnhancedTechPartnerData[];
 }
 
+// Add type for toggle values
+type ViewType = 'timeline' | 'contributors';
+
+const PARTNER_COLORS: Record<string, { bg: string, text: string, hover: string }> = {
+  'Libp2p': { bg: 'bg-blue-50', text: 'text-blue-700', hover: 'hover:bg-blue-100' },
+  'IPFS': { bg: 'bg-teal-50', text: 'text-teal-700', hover: 'hover:bg-teal-100' },
+  'Fil-B': { bg: 'bg-purple-50', text: 'text-purple-700', hover: 'hover:bg-purple-100' },
+  'Fil-Oz': { bg: 'bg-indigo-50', text: 'text-indigo-700', hover: 'hover:bg-indigo-100' },
+  'Coordination Network': { bg: 'bg-rose-50', text: 'text-rose-700', hover: 'hover:bg-rose-100' },
+  'Storacha': { bg: 'bg-amber-50', text: 'text-amber-700', hover: 'hover:bg-amber-100' },
+  'Drand': { bg: 'bg-emerald-50', text: 'text-emerald-700', hover: 'hover:bg-emerald-100' }
+};
+
 export function TechPartnerChart({ data }: TechPartnerChartProps) {
   const [selectedPartner, setSelectedPartner] = useState<string>('all');
-  const [view, setView] = useState<'timeline' | 'contributors'>('timeline');
+  const [view, setView] = useState<ViewType>('timeline');
+
+  // Add debug logging
+  React.useEffect(() => {
+    console.log('TechPartnerChart processing data:', {
+      totalPartners: data.length,
+      partners: data.map(p => ({
+        name: p.partner,
+        totalIssues: p.issues,
+        weekCount: p.timeSeriesData.length,
+        sampleWeek: p.timeSeriesData[0]
+      }))
+    });
+  }, [data]);
 
   const getHighlightedIssues = (partnerData: EnhancedTechPartnerData): ActionableInsight[] => {
     const insights: ActionableInsight[] = [];
@@ -62,15 +88,23 @@ export function TechPartnerChart({ data }: TechPartnerChartProps) {
   };
 
   const filteredData = React.useMemo(() => {
-    if (selectedPartner === 'all') return data;
-    return data.filter(item => item.partner === selectedPartner);
+    // Add debug logging
+    console.log('TechPartnerChart Data:', {
+      allData: data,
+      selectedPartner,
+      dataLength: data.length
+    });
+
+    return selectedPartner === 'all' 
+      ? data 
+      : data.filter(item => item.partner === selectedPartner);
   }, [data, selectedPartner]);
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="space-y-6">
         <div className="flex justify-between items-start">
-          <div>
+          <div className="space-y-2">
             <CardTitle>Partner Activity Overview</CardTitle>
             <CardDescription>Comprehensive tech partner engagement metrics</CardDescription>
           </div>
@@ -94,8 +128,8 @@ export function TechPartnerChart({ data }: TechPartnerChartProps) {
         <ToggleGroup
           type="single"
           value={view}
-          onValueChange={(value) => value && setView(value as 'timeline' | 'contributors')}
-          className="justify-start"
+          onValueChange={(value: string) => value && setView(value as ViewType)}
+          className="justify-start mb-6"
         >
           <ToggleGroupItem value="timeline" aria-label="Show timeline view">
             Timeline
@@ -104,46 +138,62 @@ export function TechPartnerChart({ data }: TechPartnerChartProps) {
             Contributors
           </ToggleGroupItem>
         </ToggleGroup>
+        
+        <div className="flex flex-wrap gap-4 mt-6">
+          {filteredData.map(partner => {
+            const colors = PARTNER_COLORS[partner.partner] || { 
+              bg: 'bg-gray-50', 
+              text: 'text-gray-700', 
+              hover: 'hover:bg-gray-100' 
+            };
+            
+            return (
+              <div
+                key={partner.partner}
+                className={`flex items-center p-3 rounded-lg border ${colors.bg} ${colors.hover} transition-shadow`}
+              >
+                <div className="flex flex-col space-y-2">
+                  <h3 className={`text-sm font-medium ${colors.text}`}>
+                    {partner.partner}
+                  </h3>
+                  <div className="flex gap-2 mt-2">
+                    {getHighlightedIssues(partner).map((insight, index) => (
+                      <TooltipProvider key={`${partner.partner}-${insight.title}-${index}`}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <a
+                              href={insight.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium transition-colors ${
+                                insight.type === 'warning'
+                                  ? 'bg-yellow-100/80 text-yellow-800 hover:bg-yellow-100'
+                                  : 'bg-green-100/80 text-green-800 hover:bg-green-100'
+                              }`}
+                            >
+                              {insight.type === 'warning' ? (
+                                <AlertCircle className="w-3 h-3" />
+                              ) : (
+                                <CheckCircle className="w-3 h-3" />
+                              )}
+                              {insight.title}
+                            </a>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs">
+                            <p className="text-xs">{insight.description}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </CardHeader>
       <CardContent>
-        {filteredData.map(partner => (
-          <div key={partner.partner} className="space-y-4 mb-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">{partner.partner}</h3>
-              <div className="flex gap-2">
-                {getHighlightedIssues(partner).map((insight, index) => (
-                  <TooltipProvider key={`${partner.partner}-${insight.title}-${index}`}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <a
-                          href={insight.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                            insight.type === 'warning'
-                              ? 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
-                              : 'bg-green-50 text-green-700 hover:bg-green-100'
-                          }`}
-                        >
-                          {insight.type === 'warning' ? (
-                            <AlertCircle className="w-4 h-4" />
-                          ) : (
-                            <CheckCircle className="w-4 h-4" />
-                          )}
-                          {insight.title}
-                        </a>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-xs">
-                        <p className="text-sm">{insight.description}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ))}
-              </div>
-            </div>
-          </div>
-        ))}
-        <div className="mt-4">
+        <div className="mt-8">
           {view === 'timeline' ? (
             <TimeSeriesView data={filteredData} />
           ) : (
