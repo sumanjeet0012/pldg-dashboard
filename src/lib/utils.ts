@@ -417,6 +417,43 @@ export function formatMetricName(key: string): string {
     .join(' ');
 }
 
+export function parseWeekNumber(weekString: string): number {
+  if (!weekString) return 0;
+
+  // Handle CSV format: "Week X (Month Day - Month Day, Year)"
+  const csvMatch = weekString.match(/Week (\d+)(?:\s*\(.*?\))?/i);
+  if (csvMatch) {
+    const weekNum = parseInt(csvMatch[1], 10);
+    if (!isNaN(weekNum) && weekNum > 0) {
+      return weekNum;
+    }
+  }
+
+  // Handle Airtable format: just the number
+  const weekNum = parseInt(weekString, 10);
+  if (!isNaN(weekNum) && weekNum > 0) {
+    return weekNum;
+  }
+
+  console.warn(`Invalid week number found: ${weekString}, using current date`);
+  return new Date().getWeek() || 1;
+}
+
+// Helper function to get the current week number
+declare global {
+  interface Date {
+    getWeek(): number;
+  }
+}
+
+Date.prototype.getWeek = function(): number {
+  const date = new Date(this.getTime());
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+  const week1 = new Date(date.getFullYear(), 0, 4);
+  return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+};
+
 // Add helper functions for program health calculations
 function calculateEngagementRate(data: EngagementData[]): number {
   const totalEntries = data.length;
