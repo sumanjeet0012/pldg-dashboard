@@ -13,25 +13,76 @@ import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
 import { RefreshCw } from 'lucide-react';
 import { enhanceTechPartnerData } from '@/lib/utils';
+import { useEffect, useState } from 'react';
+import Papa, { ParseResult, ParseConfig, ParseError, Parser } from 'papaparse';
+import { processData } from '@/lib/data-processing';
+import { EngagementData } from '@/types/dashboard';
 
 export default function DeveloperEngagementDashboard() {
   const { data, isLoading, isError, refresh, lastUpdated, isFetching } = useDashboardSystemContext();
+  const [csvData, setCsvData] = useState<EngagementData[]>([]);
+  const [isLoadingCSV, setIsLoadingCSV] = useState(true);
+  const [errorCSV, setErrorCSV] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadCSVData() {
+      try {
+        console.log('Loading CSV data...');
+        const response = await fetch('/data/Weekly Engagement Survey Breakdown (3).csv');
+        if (!response.ok) {
+          throw new Error(`Failed to fetch CSV: ${response.statusText}`);
+        }
+        const csvText = await response.text();
+        
+        Papa.parse<EngagementData>(csvText, {
+          header: true,
+          skipEmptyLines: true,
+          transformHeader: (header: string) => header.trim(),
+          complete: (results: ParseResult<EngagementData>) => {
+            console.log('CSV Parse Results:', {
+              data: results.data.slice(0, 2),
+              errors: results.errors,
+              meta: results.meta
+            });
+            
+            if (results.errors.length > 0) {
+              console.error('CSV parsing errors:', results.errors);
+              setErrorCSV('Invalid CSV format');
+              return;
+            }
+            setCsvData(results.data);
+            setIsLoadingCSV(false);
+          },
+          error: (error: ParseError): void => {
+            console.error('CSV parsing error:', error);
+            setErrorCSV(error.message);
+          }
+        } as ParseConfig<EngagementData>);
+      } catch (error) {
+        console.error('Failed to load CSV:', error);
+        setErrorCSV(error instanceof Error ? error.message : 'Failed to load data');
+      }
+    }
+    loadCSVData();
+  }, []);
+
+  const processedData = csvData.length > 0 ? processData(csvData) : null;
 
   const enhancedTechPartnerData = React.useMemo(() =>
-    data?.techPartnerPerformance && data?.rawEngagementData
-      ? enhanceTechPartnerData(data.techPartnerPerformance, data.rawEngagementData)
+    processedData?.techPartnerPerformance && processedData?.rawEngagementData
+      ? enhanceTechPartnerData(processedData.techPartnerPerformance, processedData.rawEngagementData)
       : [],
-    [data?.techPartnerPerformance, data?.rawEngagementData]
+    [processedData?.techPartnerPerformance, processedData?.rawEngagementData]
   );
 
   React.useEffect(() => {
     console.log('Dashboard State:', {
-      hasData: !!data,
-      metrics: data ? {
-        contributors: data.activeContributors,
-        techPartners: data.programHealth.activeTechPartners,
-        engagementTrends: data.engagementTrends.length,
-        technicalProgress: data.technicalProgress.length,
+      hasData: !!processedData,
+      metrics: processedData ? {
+        contributors: processedData.activeContributors,
+        techPartners: processedData.programHealth.activeTechPartners,
+        engagementTrends: processedData.engagementTrends.length,
+        technicalProgress: processedData.technicalProgress.length,
         techPartnerData: enhancedTechPartnerData
       } : null,
       isLoading,
@@ -39,9 +90,17 @@ export default function DeveloperEngagementDashboard() {
       isFetching,
       lastUpdated: new Date(lastUpdated).toISOString()
     });
-  }, [data, isLoading, isError, isFetching, lastUpdated, enhancedTechPartnerData]);
+  }, [processedData, isLoading, isError, isFetching, lastUpdated, enhancedTechPartnerData]);
 
-  if (!data && isLoading) {
+  if (isLoadingCSV) {
+    return <div>Loading CSV data...</div>;
+  }
+
+  if (errorCSV || !processedData) {
+    return <div>Error: {errorCSV || 'No data available'}</div>;
+  }
+
+  if (!processedData && isLoading) {
     return (
       <div className="container mx-auto p-4">
         <div className="h-[calc(100vh-200px)] flex items-center justify-center">
@@ -51,7 +110,7 @@ export default function DeveloperEngagementDashboard() {
     );
   }
 
-  if (isError || !data) {
+  if (isError || !processedData) {
     return (
       <div className="container mx-auto p-4">
         <div className="p-4 text-center text-red-600">
@@ -98,22 +157,22 @@ export default function DeveloperEngagementDashboard() {
 
       {/* Top Section - Executive Summary */}
       <div className="mb-6 bg-white rounded-lg shadow-md">
-        <ExecutiveSummary data={data} />
+        <ExecutiveSummary data={processedData} />
       </div>
 
       {/* Action Items Section */}
       <div className="mb-8">
-        <ActionableInsights data={data} />
+        <ActionableInsights data={processedData} />
       </div>
 
       {/* Charts Section - Side by Side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-        <EngagementChart data={data.engagementTrends} />
+        <EngagementChart data={processedData.engagementTrends} />
         <TechnicalProgressChart
-          data={data.technicalProgress}
+          data={processedData.technicalProgress}
           githubData={{
-            inProgress: data.issueMetrics[0]?.open || 0,
-            done: data.issueMetrics[0]?.closed || 0
+            inProgress: processedData.issueMetrics[0]?.open || 0,
+            done: processedData.issueMetrics[0]?.closed || 0
           }}
         />
       </div>
@@ -129,7 +188,7 @@ export default function DeveloperEngagementDashboard() {
             <CardTitle>Top Contributors</CardTitle>
           </CardHeader>
           <CardContent>
-            <TopPerformersTable data={data.topPerformers} />
+            <TopPerformersTable data={processedData.topPerformers} />
           </CardContent>
         </Card>
       </div>

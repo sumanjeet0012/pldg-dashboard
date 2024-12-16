@@ -3,7 +3,7 @@ import {
   EngagementData, ProcessedData, TechPartnerMetrics,
   TechPartnerPerformance, ContributorDetails, IssueResult,
   IssueHighlight, EnhancedTechPartnerData, ActionItem,
-  GitHubData, IssueMetrics
+  GitHubData, IssueMetrics, EngagementTrend
 } from '@/types/dashboard';
 import * as utils from './utils';
 
@@ -114,10 +114,15 @@ function parseTechPartners(techPartner: string | string[]): string[] {
   return techPartner?.split(',').map(p => p.trim()) ?? [];
 }
 
-// Helper function to parse week numbers consistently
+// Update the week parsing function to handle CSV format correctly
 function parseWeekNumber(weekString: string): number {
-  // Use the shared implementation from utils.ts
-  return utils.parseWeekNumber(weekString);
+  // Format: "Week X (Month Day - Month Day, Year)"
+  const match = weekString.match(/Week (\d+)/i);
+  if (!match) {
+    console.warn(`Invalid week format: ${weekString}`);
+    return 0;
+  }
+  return parseInt(match[1]);
 }
 
 // Helper function to format week string consistently
@@ -487,113 +492,248 @@ function validateEngagementData(data: any[]): data is EngagementData[] {
   );
 }
 
-// Main Process Data Function
-export function processData(
-  airtableData: EngagementData[],
-  githubData: GitHubData
-): ProcessedData {
-  console.log('Starting data processing:', {
-    airtableRecords: airtableData?.length,
-    sampleRecord: airtableData?.[0],
-    githubStatus: githubData?.statusGroups
+// Add type for tech partner string
+type TechPartner = string;
+
+function processCSVData(csvData: any[]): TechPartnerPerformance[] {
+  console.log('Processing CSV data input:', {
+    recordCount: csvData.length,
+    sampleRecord: csvData[0]
   });
 
-  if (!Array.isArray(airtableData) || !airtableData.length || !validateEngagementData(airtableData)) {
-    console.error('Invalid Airtable data:', airtableData);
-    throw new Error('Invalid Airtable data format');
-  }
+  const partnerData = new Map<TechPartner, {
+    weeklyData: Map<string, {
+      issues: any[];
+      contributors: Set<string>;
+      issueCount: number;
+      engagementLevel: number;
+    }>;
+    contributors: Map<string, {
+      issuesCompleted: number;
+      engagementScore: number;
+      githubUsername: string;
+    }>;
+  }>();
 
-  // Sort data by week number consistently
-  const sortByWeek = (a: string, b: string) => {
-    const weekA = parseWeekNumber(a);
-    const weekB = parseWeekNumber(b);
-    return weekA - weekB;
-  };
+  csvData.forEach(row => {
+    if (row['Tech Partner Collaboration?'] !== 'Yes') return;
 
-  // Calculate active weeks
-  const activeWeeks = Array.from(new Set(airtableData.map(entry => entry['Program Week'])))
-    .filter(Boolean)
-    .sort(sortByWeek);
+    // Handle multiple tech partners
+    const partners: TechPartner[] = (row['Which Tech Partner'] || '')
+      .toString()
+      .split(',')
+      .map((p: string): string => p.trim())
+      .filter(Boolean);
 
+    partners.forEach((partner: TechPartner) => {
+      if (!partnerData.has(partner)) {
+        partnerData.set(partner, {
+          weeklyData: new Map(),
+          contributors: new Map()
+        });
+      }
+
+      const data = partnerData.get(partner)!;
+      // Keep the original week format from CSV
+      const week = row['Program Week'];
+
+      if (!data.weeklyData.has(week)) {
+        data.weeklyData.set(week, {
+          issues: [],
+          contributors: new Set(),
+          issueCount: 0,
+          engagementLevel: 0
+        });
+      }
+
+      const weekData = data.weeklyData.get(week)!;
+      weekData.contributors.add(row.Name);
+
+      // Process issues
+      const issueCount = row['How many issues, PRs, or projects this week?'] === '4+'
+        ? 4
+        : parseInt(row['How many issues, PRs, or projects this week?'] || '0');
+      weekData.issueCount += issueCount;
+
+      // Add specific issues
+      for (let i = 1; i <= 3; i++) {
+        const title = row[`Issue Title ${i}`];
+        const url = row[`Issue Link ${i}`];
+        if (title && url) {
+          weekData.issues.push({
+            title,
+            url,
+            status: 'open',
+            lastUpdated: new Date().toISOString(),
+            contributor: row.Name
+          });
+        }
+      }
+
+      // Update contributor data
+      if (!data.contributors.has(row.Name)) {
+        data.contributors.set(row.Name, {
+          issuesCompleted: 0,
+          engagementScore: 0,
+          githubUsername: row['Github Username'] || ''
+        });
+      }
+
+      const contributor = data.contributors.get(row.Name)!;
+      contributor.issuesCompleted += issueCount;
+      
+      const engagement = row['Engagement Participation ']?.includes('3 -') ? 3
+        : row['Engagement Participation ']?.includes('2 -') ? 2
+        : row['Engagement Participation ']?.includes('1 -') ? 1
+        : 0;
+      contributor.engagementScore = Math.max(contributor.engagementScore, engagement);
+      weekData.engagementLevel = Math.max(weekData.engagementLevel, engagement);
+    });
+  });
+
+  // Convert to array and sort weeks chronologically
+  const result = Array.from(partnerData.entries()).map(([partner, data]) => ({
+    partner,
+    timeSeriesData: Array.from(data.weeklyData.entries())
+      .sort((a, b) => parseWeekNumber(a[0]) - parseWeekNumber(b[0]))
+      .map(([week, weekData]) => ({
+        week,
+        weekEndDate: new Date().toISOString(),
+        issueCount: weekData.issueCount,
+        contributors: Array.from(weekData.contributors),
+        engagementLevel: weekData.engagementLevel,
+        issues: weekData.issues
+      })),
+    contributorDetails: Array.from(data.contributors.entries()).map(([name, details]) => ({
+      name,
+      githubUsername: details.githubUsername,
+      issuesCompleted: details.issuesCompleted,
+      engagementScore: details.engagementScore
+    })),
+    issues: Array.from(data.contributors.values())
+      .reduce((sum, c) => sum + c.issuesCompleted, 0)
+  }));
+
+  console.log('Processed tech partner data:', result);
+  return result;
+}
+
+// Add the missing calculateTotalContributions function
+function calculateTotalContributions(csvData: any[]): number {
+  return csvData.reduce((sum, row) => {
+    const count = row['How many issues, PRs, or projects this week?'];
+    return sum + (count === '4+' ? 4 : parseInt(count || '0'));
+  }, 0);
+}
+
+// Update the processData function to return all required ProcessedData fields
+export function processData(
+  csvData: any[],
+  githubData?: GitHubData | null
+): ProcessedData {
+  console.log('Processing data:', {
+    recordCount: csvData.length,
+    sampleRecord: csvData[0],
+    hasGithubData: !!githubData
+  });
+
+  const techPartnerPerformance = processCSVData(csvData);
+  console.log('Tech Partner Performance:', techPartnerPerformance);
+
+  // Calculate core metrics with validation
+  const activeContributors = new Set(csvData.filter(row => row.Name).map(row => row.Name)).size;
+  const totalContributions = calculateTotalContributions(csvData);
+  
   // Calculate tech partners
   const techPartners = new Set(
-    airtableData.flatMap(entry => parseTechPartners(entry['Which Tech Partner']))
+    csvData.flatMap(row => 
+      (row['Which Tech Partner'] || '').toString().split(',')
+        .map((p: string) => p.trim())
+        .filter(Boolean)
+    )
   );
 
-  const activeContributorsCount = new Set(airtableData.map(e => e.Name)).size;
-  const totalContributions = airtableData.reduce((sum, entry) =>
-    sum + parseInt(entry['How many issues, PRs, or projects this week?']?.toString() || '0'), 0
-  );
-
-  const result: ProcessedData = {
-    weeklyChange: calculateWeeklyChange(airtableData),
-    activeContributors: activeContributorsCount,
+  return {
+    weeklyChange: calculateWeeklyChange(csvData),
+    activeContributors,
     totalContributions,
     programHealth: {
-      npsScore: calculateNPSScore(airtableData),
-      engagementRate: calculateEngagementRate(airtableData),
+      npsScore: calculateNPSScore(csvData),
+      engagementRate: calculateEngagementRate(csvData),
       activeTechPartners: techPartners.size
     },
     keyHighlights: {
-      activeContributorsAcrossTechPartners: `${activeContributorsCount} across ${techPartners.size}`,
+      activeContributorsAcrossTechPartners: `${activeContributors} across ${techPartners.size}`,
       totalContributions: `${totalContributions} total`,
-      positiveFeedback: `${calculatePositiveFeedback(airtableData)} positive`,
-      weeklyContributions: `${calculateWeeklyChange(airtableData)}% change`
+      positiveFeedback: `${calculatePositiveFeedback(csvData)} positive`,
+      weeklyContributions: `${calculateWeeklyChange(csvData)}% change`
     },
-    topPerformers: calculateTopPerformers(airtableData),
-    techPartnerMetrics: calculateTechPartnerMetrics(airtableData),
-    techPartnerPerformance: calculateTechPartnerPerformance(
-      airtableData as unknown as WeeklyEngagementEntry[]
-    ),
-    engagementTrends: Object.entries(_.groupBy(airtableData, 'Program Week'))
-      .sort((a, b) => {
-        // Extract week numbers and compare them numerically
-        const weekA = parseInt(a[0].match(/Week\s+(\d+)/i)?.[1] || '0');
-        const weekB = parseInt(b[0].match(/Week\s+(\d+)/i)?.[1] || '0');
-        return weekA - weekB;
-      })
-      .map(([week, entries]) => ({
-        week: formatWeekString(week),
-        'High Engagement': entries.filter(e => e['Engagement Participation ']?.includes('3 -')).length,
-        'Medium Engagement': entries.filter(e => e['Engagement Participation ']?.includes('2 -')).length,
-        'Low Engagement': entries.filter(e => e['Engagement Participation ']?.includes('1 -')).length,
-        total: entries.length
-      })),
-    technicalProgress: Object.entries(_.groupBy(airtableData, 'Program Week'))
-      .sort((a, b) => sortByWeek(a[0], b[0]))
-      .map(([week, entries]) => ({
-        week: formatWeekString(week),
-        'Total Issues': entries.reduce((sum, entry) =>
-          sum + parseInt(entry['How many issues, PRs, or projects this week?'] || '0'), 0
-        ),
-        'In Progress': githubData?.statusGroups?.inProgress || 0,
-        'Done': githubData?.statusGroups?.done || 0
-      })),
-    issueMetrics: processRawIssueMetrics(airtableData),
-    actionItems: calculateActionItems(airtableData),
+    topPerformers: calculateTopPerformers(csvData),
+    techPartnerMetrics: calculateTechPartnerMetrics(csvData),
+    techPartnerPerformance,
+    engagementTrends: calculateEngagementTrends(csvData),
+    technicalProgress: calculateTechnicalProgress(csvData, githubData),
+    issueMetrics: processRawIssueMetrics(csvData),
+    actionItems: calculateActionItems(csvData),
     feedbackSentiment: {
-      positive: calculatePositiveFeedback(airtableData),
+      positive: calculatePositiveFeedback(csvData),
       neutral: 0,
       negative: 0
     },
     contributorGrowth: [{
       week: new Date().toISOString().split('T')[0],
-      newContributors: activeContributorsCount,
+      newContributors: activeContributors,
       returningContributors: 0,
-      totalActive: activeContributorsCount
+      totalActive: activeContributors
     }],
-    rawEngagementData: airtableData // Add this line to include raw data
+    rawEngagementData: csvData
   };
+}
 
-  console.log('Processing complete:', {
-    result: {
-      contributors: result.activeContributors,
-      techPartners: result.programHealth.activeTechPartners,
-      trends: result.engagementTrends.length
-    }
+// Add helper functions for the new calculations
+function calculateEngagementTrends(csvData: any[]): EngagementTrend[] {
+  // First, get all unique weeks and sort them
+  const allWeeks = Array.from(new Set(csvData.map(row => row['Program Week'])))
+    .sort((a, b) => parseWeekNumber(a) - parseWeekNumber(b));
+
+  // Create a map of week data
+  const weeklyData = _.groupBy(csvData, 'Program Week');
+
+  // Process each week
+  return allWeeks.map(week => {
+    const entries = weeklyData[week] || [];
+    
+    // Count unique contributors for this week
+    const activeContributors = new Set(entries.map(e => e.Name)).size;
+
+    // Debug logging
+    console.log(`Week ${week} contributors:`, {
+      total: activeContributors,
+      uniqueNames: new Set(entries.map(e => e.Name))
+    });
+
+    return {
+      week: `Week ${parseWeekNumber(week)}`,
+      total: activeContributors,
+      // Add zero values for backward compatibility
+      'High Engagement': 0,
+      'Medium Engagement': 0,
+      'Low Engagement': 0
+    };
   });
+}
 
-  return result;
+function calculateTechnicalProgress(csvData: any[], githubData?: GitHubData | null) {
+  return Object.entries(_.groupBy(csvData, 'Program Week'))
+    .sort((a, b) => parseWeekNumber(a[0]) - parseWeekNumber(b[0]))
+    .map(([week, entries]) => ({
+      week: formatWeekString(week),
+      'Total Issues': entries.reduce((sum, entry) =>
+        sum + parseInt(entry['How many issues, PRs, or projects this week?'] || '0'), 0
+      ),
+      'In Progress': githubData?.statusGroups?.inProgress || 0,
+      'Done': githubData?.statusGroups?.done || 0
+    }));
 }
 
 // Add helper function to safely get string field

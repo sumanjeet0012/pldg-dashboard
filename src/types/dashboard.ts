@@ -154,10 +154,11 @@ export interface EnhancedTechPartnerData extends TechPartnerPerformance {
 
 export interface EngagementTrend {
   week: string;
-  'High Engagement': number;
-  'Medium Engagement': number;
-  'Low Engagement': number;
   total: number;
+  // Optional fields for backward compatibility
+  'High Engagement'?: number;
+  'Medium Engagement'?: number;
+  'Low Engagement'?: number;
 }
 
 export interface TechnicalProgress {
