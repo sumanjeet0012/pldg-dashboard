@@ -5,6 +5,7 @@ import {
   IssueHighlight, EnhancedTechPartnerData, ActionItem,
   GitHubData, IssueMetrics
 } from '@/types/dashboard';
+import * as utils from './utils';
 
 // Types for CSV data structure
 interface WeeklyEngagementEntry {
@@ -115,8 +116,8 @@ function parseTechPartners(techPartner: string | string[]): string[] {
 
 // Helper function to parse week numbers consistently
 function parseWeekNumber(weekString: string): number {
-  const match = weekString.match(/Week #?(\d+)/i);
-  return match ? parseInt(match[1]) : 0;
+  // Use the shared implementation from utils.ts
+  return utils.parseWeekNumber(weekString);
 }
 
 // Helper function to format week string consistently
@@ -258,13 +259,13 @@ function calculateTechPartnerPerformance(data: EngagementData[] | WeeklyEngageme
 
   // First, process all entries by contributor
   const contributorMap = new Map<string, ContributorDetail>();
-  
+
   data.forEach(entry => {
     if (entry['Tech Partner Collaboration?'] !== 'Yes') return;
-    
+
     const name = isWeeklyEntry(entry) ? entry.Name : entry.Name;
     const githubUsername = isWeeklyEntry(entry) ? entry['Github Username'] : entry['Github Username'];
-    
+
     const key = `${name}-${githubUsername}`;
     if (!contributorMap.has(key)) {
       contributorMap.set(key, {
@@ -280,7 +281,7 @@ function calculateTechPartnerPerformance(data: EngagementData[] | WeeklyEngageme
 
     const contributor = contributorMap.get(key)!;
     const partners = normalizeTechPartners(entry['Which Tech Partner']);
-    
+
     // Add week and partners
     contributor.weeks.add(entry['Program Week']);
     partners.forEach(p => contributor.techPartners.add(p));
@@ -289,7 +290,7 @@ function calculateTechPartnerPerformance(data: EngagementData[] | WeeklyEngageme
     const processIssue = (title: string | string[] | undefined, link: string | string[] | undefined) => {
       const titleStr = Array.isArray(title) ? title[0] : title;
       const linkStr = Array.isArray(link) ? link[0] : link;
-      
+
       if (titleStr && linkStr) {
         partners.forEach(partner => {
           contributor.recentContributions.push({
@@ -310,9 +311,9 @@ function calculateTechPartnerPerformance(data: EngagementData[] | WeeklyEngageme
     const issueCount = entry['How many issues, PRs, or projects this week?'] === '4+'
       ? 4
       : parseInt(entry['How many issues, PRs, or projects this week?'] || '0');
-    
+
     contributor.issuesCompleted += issueCount;
-    
+
     const engagement = entry['Engagement Participation ']?.includes('3 -') ? 3
       : entry['Engagement Participation ']?.includes('2 -') ? 2
       : entry['Engagement Participation ']?.includes('1 -') ? 1
@@ -349,10 +350,10 @@ function calculateTechPartnerPerformance(data: EngagementData[] | WeeklyEngageme
             engagementLevel: 0
           });
         }
-        
+
         const weekData = partnerData.weeklyData.get(week)!;
         weekData.contributors.add(contributor.name);
-        
+
         // Add relevant issues
         const weekIssues = contributor.recentContributions
           .filter(c => c.week === week && c.partner === partner)
@@ -365,7 +366,7 @@ function calculateTechPartnerPerformance(data: EngagementData[] | WeeklyEngageme
             contributor: contributor.name,
             week
           }));
-        
+
         weekData.issues.push(...weekIssues);
         weekData.issueCount += weekIssues.length;
         weekData.engagementLevel = Math.max(weekData.engagementLevel, contributor.engagementScore);
@@ -388,7 +389,8 @@ function calculateTechPartnerPerformance(data: EngagementData[] | WeeklyEngageme
           title: issue.title,
           url: issue.url,
           status: 'open',
-          lastUpdated: new Date().toISOString()
+          lastUpdated: new Date().toISOString(),
+          contributor: issue.contributor  // Add contributor field
         }))
       })),
     contributorDetails: data.contributors.map(c => ({
@@ -477,7 +479,7 @@ function processRawIssueMetrics(entries: EngagementData[]): IssueMetrics[] {
 
 // Add validation helper
 function validateEngagementData(data: any[]): data is EngagementData[] {
-  return data.every(entry => 
+  return data.every(entry =>
     typeof entry === 'object' &&
     typeof entry.Name === 'string' &&
     typeof entry['Program Week'] === 'string' &&

@@ -83,8 +83,9 @@ export interface TechPartnerPerformance {
     issues: Array<{
       title: string;
       url: string;
-      status: string;
+      status: 'open' | 'closed';
       lastUpdated: string;
+      contributor: string;
     }>;
   }>;
   contributorDetails: Array<{
@@ -127,6 +128,7 @@ export interface IssueTracking {
   status: 'open' | 'closed';
   engagement: number;
   week: string;
+  contributor: string;
 }
 
 export interface EnhancedTechPartnerData extends TechPartnerPerformance {
@@ -141,6 +143,7 @@ export interface EnhancedTechPartnerData extends TechPartnerPerformance {
       url: string;
       status: 'open' | 'closed';
       lastUpdated: string;
+      contributor: string;
     }>;
   }[];
   contributorDetails: ContributorDetails[];
