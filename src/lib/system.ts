@@ -3,6 +3,7 @@ import { useAirtableData } from './airtable';
 import { useGitHubData } from './github';
 import { useCSVData } from '@/hooks/useCSVData';
 import { processData } from './data-processing';
+import { GitHubData } from '@/types/dashboard';
 import React from 'react';
 
 export function useDashboardSystem() {
@@ -77,11 +78,49 @@ export function useDashboardSystem() {
       timestamp: new Date().toISOString()
     });
 
-    // Try CSV data first
-    if (!isCSVLoading && csvData?.length > 0 && githubData?.statusGroups) {
+    // Try CSV data first - make GitHub data optional
+    if (!isCSVLoading && csvData?.length > 0) {
       try {
         console.log('Processing CSV data...');
-        const result = processData(csvData, githubData);
+        // Transform CSV data to match Airtable format
+        const transformedData = csvData.map(entry => ({
+          Name: entry.Name,
+          'Program Week': entry['Program Week'],
+          'Which Tech Partner': entry['Which Tech Partner'] || '',
+          'Tech Partner Collaboration?': entry['Tech Partner Collaboration?'] || 'No',
+          'Engagement Participation ': entry['Engagement Participation '] || '1 - Low',
+          'How many issues, PRs, or projects this week?': entry['How many issues, PRs, or projects this week?'] || '0',
+          'Issue Title 1': entry['Issue Title 1'] || '',
+          'Issue Link 1': entry['Issue Link 1'] || '',
+          'How likely are you to recommend the PLDG to others?': entry['How likely are you to recommend the PLDG to others?'] || '0',
+          'PLDG Feedback': entry['PLDG Feedback'] || ''
+        }));
+
+        const mockGitHubData: GitHubData = {
+          project: {
+            user: {
+              projectV2: {
+                items: {
+                  nodes: []
+                }
+              }
+            }
+          },
+          issues: [],
+          statusGroups: {
+            todo: 0,
+            inProgress: 0,
+            done: 0
+          },
+          timestamp: Date.now()
+        };
+
+        console.log('Transformed CSV data:', {
+          recordCount: transformedData.length,
+          sampleRecord: transformedData[0]
+        });
+
+        const result = processData(transformedData, githubData || mockGitHubData);
         return result;
       } catch (error) {
         console.error('Error processing CSV data:', error);
@@ -90,10 +129,28 @@ export function useDashboardSystem() {
     }
 
     // Fall back to Airtable data if CSV fails or is unavailable
-    if (!isAirtableLoading && airtableData?.length > 0 && githubData?.statusGroups) {
+    if (!isAirtableLoading && airtableData?.length > 0) {
       try {
         console.log('Processing Airtable data...');
-        const result = processData(airtableData, githubData);
+        const mockGitHubData: GitHubData = {
+          project: {
+            user: {
+              projectV2: {
+                items: {
+                  nodes: []
+                }
+              }
+            }
+          },
+          issues: [],
+          statusGroups: {
+            todo: 0,
+            inProgress: 0,
+            done: 0
+          },
+          timestamp: Date.now()
+        };
+        const result = processData(airtableData, githubData || mockGitHubData);
         return result;
       } catch (error) {
         console.error('Error processing Airtable data:', error);
@@ -104,7 +161,7 @@ export function useDashboardSystem() {
     // If both data sources fail and we're still loading, return null
     if ((isCSVLoading && !csvData?.length) ||
         (isAirtableLoading && !airtableData?.length) ||
-        (isGithubLoading && !githubData?.statusGroups)) {
+        isGithubLoading) {
       console.log('Still loading initial data...');
       return null;
     }
