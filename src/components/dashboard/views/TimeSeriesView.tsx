@@ -2,9 +2,8 @@
 
 import * as React from 'react';
 import { EnhancedTechPartnerData } from '@/types/dashboard';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Card } from '@/components/ui/card';
-import { GitPullRequest, Users, TrendingUp } from 'lucide-react';
 
 interface TimeSeriesViewProps {
   data: EnhancedTechPartnerData[];
@@ -16,32 +15,25 @@ interface CustomTooltipProps {
   label?: string;
 }
 
-const parseWeekNumber = (weekString: string): number => {
-  const match = weekString?.match(/Week #?(\d+)/i);
-  return match ? parseInt(match[1], 10) : 0;
-};
-
 const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   if (!active || !payload?.length) return null;
 
-  const data = payload[0].payload;
   return (
     <Card className="p-3 bg-white/95 shadow-lg border-0">
       <div className="space-y-2">
-        <div className="font-medium">{data.partner} - Week {label ? parseWeekNumber(label) : ''}</div>
-        <div className="grid gap-2 text-sm">
-          <div className="flex items-center gap-2">
-            <GitPullRequest className="h-4 w-4" />
-            <span>Issues: {data.issues}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            <span>Contributors: {data.contributors}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4" />
-            <span>Engagement: {data.engagementLevel}</span>
-          </div>
+        <div className="font-medium">Week {label}</div>
+        <div className="grid gap-1 text-sm">
+          {payload.map((entry, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: entry.color }}
+              />
+              <span>
+                {entry.name}: {entry.value} {entry.value === 1 ? 'issue' : 'issues'}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
     </Card>
@@ -49,70 +41,96 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
 };
 
 export function TimeSeriesView({ data }: TimeSeriesViewProps) {
-  const timeSeriesData = React.useMemo(() => {
-    if (!data?.length) return [];
+  const chartData = React.useMemo(() => {
+    // Get all unique weeks
+    const allWeeks = new Set<string>();
+    data.forEach(partner => {
+      partner.timeSeriesData.forEach(ts => {
+        allWeeks.add(ts.week);
+      });
+    });
 
-    console.log('TimeSeriesView processing data:', data);
-    console.log('First partner sample:', data[0]);
+    // Sort weeks by number
+    const sortedWeeks = Array.from(allWeeks).sort((a, b) => {
+      const weekA = parseInt(a.match(/\d+/)?.[0] || '0');
+      const weekB = parseInt(b.match(/\d+/)?.[0] || '0');
+      return weekA - weekB;
+    });
 
-    const allData = data.flatMap(partner =>
-      (partner.timeSeriesData || []).map(series => ({
-        week: series.week || '',
-        weekNumber: parseWeekNumber(series.week || ''),
-        partner: partner.partner || 'Unknown',
-        issues: series.issueCount || 0,
-        contributors: (series.contributors || []).length,
-        engagementLevel: series.engagementLevel || 0
-      }))
-    ).filter(item => item.week && item.weekNumber > 0);
-
-    // Sort by week number
-    return allData.sort((a, b) => a.weekNumber - b.weekNumber);
+    // Create data points for each week
+    return sortedWeeks.map(week => {
+      const point: Record<string, any> = { week };
+      data.forEach(partner => {
+        const weekData = partner.timeSeriesData.find(ts => ts.week === week);
+        point[partner.partner] = weekData?.issueCount || 0;
+      });
+      return point;
+    });
   }, [data]);
 
+  // Add debug logging
+  React.useEffect(() => {
+    console.log('TimeSeriesView Data:', {
+      rawData: data,
+      processedData: chartData,
+      weekCount: chartData.length,
+      partners: data.map(p => p.partner)
+    });
+  }, [data, chartData]);
+
+  const COLORS = {
+    'Libp2p': '#3B82F6',
+    'IPFS': '#14B8A6',
+    'Fil-B': '#A855F7',
+    'Fil-Oz': '#6366F1',
+    'Coordination Network': '#F43F5E',
+    'Storacha': '#F59E0B',
+    'Drand': '#10B981'
+  };
+
   return (
-    <ResponsiveContainer width="100%" height={400}>
-      <LineChart data={timeSeriesData}>
-        <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-        <XAxis
-          dataKey="week"
-          tick={{ fontSize: 12 }}
-          tickMargin={10}
-          tickFormatter={(value) => `Week ${parseWeekNumber(value)}`}
-        />
-        <YAxis
-          tick={{ fontSize: 12 }}
-          tickMargin={10}
-        />
-        <Tooltip content={<CustomTooltip />} />
-        <Line
-          type="monotone"
-          dataKey="issues"
-          stroke="#8884d8"
-          name="Issues"
-          strokeWidth={2}
-          dot={{ r: 4 }}
-          activeDot={{ r: 6, strokeWidth: 2 }}
-        />
-        <Line
-          type="monotone"
-          dataKey="contributors"
-          stroke="#82ca9d"
-          name="Contributors"
-          strokeWidth={2}
-          dot={{ r: 4 }}
-          activeDot={{ r: 6, strokeWidth: 2 }}
-        />
-        <Line
-          type="monotone"
-          dataKey="engagementLevel"
-          stroke="#ffc658"
-          name="Engagement Level"
-          strokeWidth={2}
-          dot={{ r: 4 }}
-          activeDot={{ r: 6, strokeWidth: 2 }}
-        />
-      </LineChart>
-    </ResponsiveContainer>
+    <div className="h-[400px] w-full">
+      <ResponsiveContainer>
+        <BarChart
+          data={chartData}
+          margin={{ top: 20, right: 40, left: 20, bottom: 30 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+          <XAxis 
+            dataKey="week"
+            tickFormatter={(value) => `Week ${value}`}
+            tick={{ fontSize: 12 }}
+            height={60}
+          />
+          <YAxis 
+            label={{ 
+              value: 'Issues', 
+              angle: -90, 
+              position: 'insideLeft',
+              style: { textAnchor: 'middle' }
+            }}
+            width={60}
+          />
+          <Tooltip content={<CustomTooltip />} />
+          <Legend 
+            verticalAlign="bottom" 
+            height={48}
+            wrapperStyle={{
+              paddingTop: '20px'
+            }}
+          />
+          
+          {data.map((partner) => (
+            <Bar
+              key={partner.partner}
+              dataKey={partner.partner}
+              name={partner.partner}
+              stackId="issues"
+              fill={COLORS[partner.partner as keyof typeof COLORS] || '#CBD5E1'}
+            />
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }

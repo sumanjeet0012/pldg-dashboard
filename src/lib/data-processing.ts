@@ -6,6 +6,105 @@ import {
   GitHubData, IssueMetrics
 } from '@/types/dashboard';
 
+// Types for CSV data structure
+interface WeeklyEngagementEntry {
+  Name: string;
+  'Github Username'?: string;
+  'Email Address'?: string;
+  'Program Week': string;
+  'Engagement Tracking'?: string;
+  'Engagement Participation '?: string;
+  'Tech Partner Collaboration?': string;
+  'Which Tech Partner': string | string[];
+  'Describe your work with the tech partner'?: string;
+  'Did you work on an issue, PR, or project this week?': string;
+  'How many issues, PRs, or projects this week?': string;
+  'Issue Title 1'?: string;
+  'Issue Link 1'?: string;
+  'Issue Title 2'?: string;
+  'Issue Link 2'?: string;
+  'Issue Title 3'?: string;
+  'Issue Link 3'?: string;
+  'How likely are you to recommend the PLDG to others?': string;
+  'PLDG Feedback'?: string;
+}
+
+// Standardized issue structure
+interface IssueEntry {
+  title: string;
+  url: string;
+  status: string;
+  lastUpdated: string;
+  partner: string;
+  contributor: string;
+  week: string;
+}
+
+// Updated ContributorDetail interface
+interface ContributorDetail {
+  name: string;
+  githubUsername: string;
+  issuesCompleted: number;
+  engagementScore: number;
+  techPartners: Set<string>;
+  weeks: Set<string>;
+  recentContributions: Array<{
+    issueTitle: string;
+    issueLink: string;
+    week: string;
+    partner: string;
+  }>;
+}
+
+// Weekly data structure
+interface WeeklyData {
+  issueCount: number;
+  contributors: Set<string>;
+  issues: IssueEntry[];
+  engagementLevel: number;
+}
+
+// Add these interfaces at the top of the file
+interface ProcessedWeekData {
+  issues: Array<{
+    title: string;
+    url: string;
+    status: string;
+    lastUpdated: string;
+  }>;
+  contributors: Set<string>;
+  issueCount: number;
+  engagementScores: number[];
+}
+
+interface ProcessedPartnerData {
+  weeks: Record<string, ProcessedWeekData>;
+  contributors: Map<string, {
+    issuesCompleted: number;
+    engagementScores: number[];
+    githubUsername: string;
+  }>;
+}
+
+// Add proper type for tech partner field
+type TechPartnerField = string | string[] | undefined;
+
+// Update type guard to be more specific
+function isTechPartnerString(value: TechPartnerField): value is string {
+  return typeof value === 'string';
+}
+
+// Add helper function to normalize tech partner data
+function normalizeTechPartners(techPartner: TechPartnerField): string[] {
+  if (Array.isArray(techPartner)) {
+    return techPartner.map((p: string) => p.trim()).filter(Boolean);
+  }
+  if (isTechPartnerString(techPartner)) {
+    return techPartner.split(',').map((p: string) => p.trim()).filter(Boolean);
+  }
+  return [];
+}
+
 // Helper function to parse tech partners consistently
 function parseTechPartners(techPartner: string | string[]): string[] {
   if (Array.isArray(techPartner)) {
@@ -25,10 +124,16 @@ function formatWeekString(weekString: string): string {
   return weekString.replace(/\(.*?\)/, '').trim();
 }
 
+// Add helper function to safely handle string or string[] fields
+function getStringValue(value: string | string[] | undefined): string {
+  if (!value) return '';
+  return Array.isArray(value) ? value[0] || '' : value;
+}
+
 // Calculate NPS Score
 function calculateNPSScore(data: EngagementData[]): number {
   const scores = data
-    .map(entry => parseInt(entry['How likely are you to recommend the PLDG to others?'] || '0'))
+    .map(entry => parseInt(getStringValue(entry['How likely are you to recommend the PLDG to others?']) || '0'))
     .filter(score => score > 0);
 
   if (scores.length === 0) return 0;
@@ -83,10 +188,11 @@ function calculateWeeklyChange(data: EngagementData[]): number {
 
 // Calculate Positive Feedback
 function calculatePositiveFeedback(data: EngagementData[]): number {
-  return data.filter(entry =>
-    entry['PLDG Feedback']?.toLowerCase().includes('great') ||
-    entry['PLDG Feedback']?.toLowerCase().includes('good')
-  ).length;
+  return data.filter(entry => {
+    const feedback = getStringValue(entry['PLDG Feedback']);
+    return feedback.toLowerCase().includes('great') || 
+           feedback.toLowerCase().includes('good');
+  }).length;
 }
 
 // Calculate Top Performers
@@ -127,140 +233,172 @@ function calculateTechPartnerMetrics(data: EngagementData[]) {
     .value();
 }
 
-// Calculate Tech Partner Performance
-function calculateTechPartnerPerformance(data: EngagementData[]) {
-  // Debug logging for data processing
-  console.log('Processing tech partner performance:', {
-    rawDataLength: data.length,
-    sampleEntry: data[0],
-    timestamp: new Date().toISOString()
+// Update the interfaces at the top
+interface ContributorDetail {
+  name: string;
+  githubUsername: string;
+  issuesCompleted: number;
+  engagementScore: number;
+  techPartners: Set<string>;
+  weeks: Set<string>;
+  recentContributions: Array<{
+    issueTitle: string;
+    issueLink: string;
+    week: string;
+    partner: string;
+  }>;
+}
+
+// Modify calculateTechPartnerPerformance to use the contributor details
+function calculateTechPartnerPerformance(data: EngagementData[] | WeeklyEngagementEntry[]): TechPartnerPerformance[] {
+  // Type guard to check if we're working with WeeklyEngagementEntry
+  const isWeeklyEntry = (entry: EngagementData | WeeklyEngagementEntry): entry is WeeklyEngagementEntry => {
+    return 'Name' in entry && 'Program Week' in entry;
+  };
+
+  // First, process all entries by contributor
+  const contributorMap = new Map<string, ContributorDetail>();
+  
+  data.forEach(entry => {
+    if (entry['Tech Partner Collaboration?'] !== 'Yes') return;
+    
+    const name = isWeeklyEntry(entry) ? entry.Name : entry.Name;
+    const githubUsername = isWeeklyEntry(entry) ? entry['Github Username'] : entry['Github Username'];
+    
+    const key = `${name}-${githubUsername}`;
+    if (!contributorMap.has(key)) {
+      contributorMap.set(key, {
+        name,
+        githubUsername: githubUsername || '',
+        issuesCompleted: 0,
+        engagementScore: 0,
+        techPartners: new Set(),
+        weeks: new Set(),
+        recentContributions: []
+      });
+    }
+
+    const contributor = contributorMap.get(key)!;
+    const partners = normalizeTechPartners(entry['Which Tech Partner']);
+    
+    // Add week and partners
+    contributor.weeks.add(entry['Program Week']);
+    partners.forEach(p => contributor.techPartners.add(p));
+
+    // Process all issues for this entry
+    const processIssue = (title: string | string[] | undefined, link: string | string[] | undefined) => {
+      const titleStr = Array.isArray(title) ? title[0] : title;
+      const linkStr = Array.isArray(link) ? link[0] : link;
+      
+      if (titleStr && linkStr) {
+        partners.forEach(partner => {
+          contributor.recentContributions.push({
+            issueTitle: titleStr,
+            issueLink: linkStr,
+            week: entry['Program Week'],
+            partner
+          });
+        });
+      }
+    };
+
+    processIssue(entry['Issue Title 1'], entry['Issue Link 1']);
+    processIssue(entry['Issue Title 2'], entry['Issue Link 2']);
+    processIssue(entry['Issue Title 3'], entry['Issue Link 3']);
+
+    // Update metrics
+    const issueCount = entry['How many issues, PRs, or projects this week?'] === '4+'
+      ? 4
+      : parseInt(entry['How many issues, PRs, or projects this week?'] || '0');
+    
+    contributor.issuesCompleted += issueCount;
+    
+    const engagement = entry['Engagement Participation ']?.includes('3 -') ? 3
+      : entry['Engagement Participation ']?.includes('2 -') ? 2
+      : entry['Engagement Participation ']?.includes('1 -') ? 1
+      : 0;
+    contributor.engagementScore = Math.max(contributor.engagementScore, engagement);
   });
 
-  // Flatten tech partner arrays before grouping
-  const flattenedData = data.flatMap(entry => {
-    const partners = Array.isArray(entry['Which Tech Partner'])
-      ? entry['Which Tech Partner']
-      : parseTechPartners(entry['Which Tech Partner'] || '');
+  // Now group by tech partner
+  const partnerMap = new Map<string, {
+    weeklyData: Map<string, WeeklyData>;
+    contributors: ContributorDetail[];
+  }>();
 
-    // Debug logging for tech partner processing
-    console.log('Processing entry:', {
-      partners,
-      issueCount: entry['How many issues, PRs, or projects this week?'],
-      week: entry['Program Week']
-    });
+  // Process contributor data into partner structure
+  Array.from(contributorMap.values()).forEach(contributor => {
+    contributor.techPartners.forEach(partner => {
+      if (!partnerMap.has(partner)) {
+        partnerMap.set(partner, {
+          weeklyData: new Map(),
+          contributors: []
+        });
+      }
 
-    return partners.map(partner => ({
-      ...entry,
-      'Which Tech Partner': partner
-    }));
-  });
+      const partnerData = partnerMap.get(partner)!;
+      partnerData.contributors.push(contributor);
 
-  return _(flattenedData)
-    .groupBy('Which Tech Partner')
-    .flatMap((items, partner) => {
-      // Skip empty partner entries
-      if (!partner || partner === '[]') return [];
-
-      // Calculate time series data
-      const timeSeriesData = _(items)
-        .groupBy('Program Week')
-        .map((weekItems, week) => {
-          const weekDate = week.match(/\((.*?)\)/)?.[1]?.split('-')?.[1]?.trim();
-          return {
-            week: formatWeekString(week),
-            weekEndDate: weekDate ? new Date(weekDate).toISOString() : new Date().toISOString(),
-            issueCount: _.sumBy(weekItems, item => {
-              const value = item['How many issues, PRs, or projects this week?'];
-              return value === '4+' ? 4 : parseInt(value || '0');
-            }),
-            contributors: Array.from(new Set(weekItems.map(item => item.Name))),
-            engagementLevel: _.meanBy(weekItems, item => {
-              const participation = item['Engagement Participation ']?.trim() || '';
-              return participation.startsWith('3') ? 3 :
-                     participation.startsWith('2') ? 2 :
-                     participation.startsWith('1') ? 1 : 0;
-            }),
-            issues: weekItems
-              .filter(item => item['GitHub Issue Title'] && item['GitHub Issue URL'])
-              .map(item => ({
-                title: item['GitHub Issue Title'] || '',
-                url: item['GitHub Issue URL'] || '',
-                status: item['Issue Status']?.toLowerCase() === 'closed' ? 'closed' : 'open',
-                lastUpdated: new Date().toISOString() // Using current date as fallback since we don't have actual lastUpdated
-              }))
-          };
-        })
-        .orderBy(item => parseWeekNumber(item.week))
-        .value();
-
-      // Calculate contributor details
-      const contributorDetails = _(items)
-        .groupBy('Name')
-        .map((contribItems, name) => {
-          const githubUsername = contribItems[0]['Github Username']?.trim();
-          return {
-            name,
-            githubUsername: githubUsername || '', // Only use actual GitHub usernames
-            email: contribItems[0]['Email Address'],
-            issuesCompleted: _.sumBy(contribItems, item =>
-              parseInt(item['How many issues, PRs, or projects this week?'] || '0')
-            ),
-            engagementScore: _.meanBy(contribItems, item => {
-              const participation = item['Engagement Participation ']?.trim() || '';
-              return participation.startsWith('3') ? 3 :
-                     participation.startsWith('2') ? 2 :
-                     participation.startsWith('1') ? 1 : 0;
-            })
-          };
-        })
-        .value();
-
-      // Find most active and stale issues
-      const issueTracking: IssueResult[] = items.map(item => ({
-        title: item['GitHub Issue Title'] || '',
-        link: item['GitHub Issue URL'] || '',
-        status: item['Issue Status']?.toLowerCase() === 'closed' ? 'closed' : 'open',
-        engagement: item['Engagement Participation ']?.trim().startsWith('3') ? 3 :
-                   item['Engagement Participation ']?.trim().startsWith('2') ? 2 :
-                   item['Engagement Participation ']?.trim().startsWith('1') ? 1 : 0,
-        week: formatWeekString(item['Program Week'])
-      })).filter(issue => issue.title && issue.link);
-
-      const activeIssue = _(issueTracking)
-        .orderBy(['engagement'], ['desc'])
-        .head();
-
-      const staleIssueResult = _(issueTracking)
-        .filter(issue => issue.status === 'open' && issue.engagement < 1)
-        .head();
-
-      const mostActiveIssue: IssueHighlight = activeIssue
-        ? { title: activeIssue.title, url: activeIssue.link }
-        : { title: 'No active issues', url: '' };
-
-      const staleIssue: IssueHighlight = staleIssueResult
-        ? { title: staleIssueResult.title, url: staleIssueResult.link }
-        : { title: 'No stale issues', url: '' };
-
-      return [{
-        partner,
-        issues: _.sumBy(items, item =>
-          parseInt(item['How many issues, PRs, or projects this week?'] || '0')
-        ),
-        timeSeriesData,
-        contributorDetails,
-        issueTracking,
-        mostActiveIssue: {
-          title: mostActiveIssue.title,
-          url: mostActiveIssue.url
-        },
-        staleIssue: {
-          title: staleIssue.title,
-          url: staleIssue.url
+      // Add weekly data
+      contributor.weeks.forEach(week => {
+        if (!partnerData.weeklyData.has(week)) {
+          partnerData.weeklyData.set(week, {
+            issueCount: 0,
+            contributors: new Set(),
+            issues: [],
+            engagementLevel: 0
+          });
         }
-      }];
-    })
-    .value();
+        
+        const weekData = partnerData.weeklyData.get(week)!;
+        weekData.contributors.add(contributor.name);
+        
+        // Add relevant issues
+        const weekIssues = contributor.recentContributions
+          .filter(c => c.week === week && c.partner === partner)
+          .map(issue => ({
+            title: issue.issueTitle,
+            url: issue.issueLink,
+            status: 'open',
+            lastUpdated: new Date().toISOString(),
+            partner,
+            contributor: contributor.name,
+            week
+          }));
+        
+        weekData.issues.push(...weekIssues);
+        weekData.issueCount += weekIssues.length;
+        weekData.engagementLevel = Math.max(weekData.engagementLevel, contributor.engagementScore);
+      });
+    });
+  });
+
+  // Convert to final TechPartnerPerformance format
+  return Array.from(partnerMap.entries()).map(([partner, data]) => ({
+    partner,
+    timeSeriesData: Array.from(data.weeklyData.entries())
+      .sort((a, b) => parseWeekNumber(a[0]) - parseWeekNumber(b[0]))
+      .map(([week, weekData]) => ({
+        week,
+        weekEndDate: new Date().toISOString(),
+        issueCount: weekData.issueCount,
+        contributors: Array.from(weekData.contributors),
+        engagementLevel: 0,
+        issues: weekData.issues.map(issue => ({
+          title: issue.title,
+          url: issue.url,
+          status: 'open',
+          lastUpdated: new Date().toISOString()
+        }))
+      })),
+    contributorDetails: data.contributors.map(c => ({
+      name: c.name,
+      githubUsername: c.githubUsername,
+      issuesCompleted: c.issuesCompleted,
+      engagementScore: c.engagementScore
+    })),
+    issues: data.contributors.reduce((sum, c) => sum + c.issuesCompleted, 0)
+  }));
 }
 
 // Calculate Action Items
@@ -337,6 +475,16 @@ function processRawIssueMetrics(entries: EngagementData[]): IssueMetrics[] {
   });
 }
 
+// Add validation helper
+function validateEngagementData(data: any[]): data is EngagementData[] {
+  return data.every(entry => 
+    typeof entry === 'object' &&
+    typeof entry.Name === 'string' &&
+    typeof entry['Program Week'] === 'string' &&
+    (typeof entry['Which Tech Partner'] === 'string' || Array.isArray(entry['Which Tech Partner']))
+  );
+}
+
 // Main Process Data Function
 export function processData(
   airtableData: EngagementData[],
@@ -348,8 +496,8 @@ export function processData(
     githubStatus: githubData?.statusGroups
   });
 
-  if (!Array.isArray(airtableData) || !airtableData.length) {
-    console.error('Invalid or empty Airtable data:', airtableData);
+  if (!Array.isArray(airtableData) || !airtableData.length || !validateEngagementData(airtableData)) {
+    console.error('Invalid Airtable data:', airtableData);
     throw new Error('Invalid Airtable data format');
   }
 
@@ -392,9 +540,16 @@ export function processData(
     },
     topPerformers: calculateTopPerformers(airtableData),
     techPartnerMetrics: calculateTechPartnerMetrics(airtableData),
-    techPartnerPerformance: calculateTechPartnerPerformance(airtableData),
+    techPartnerPerformance: calculateTechPartnerPerformance(
+      airtableData as unknown as WeeklyEngagementEntry[]
+    ),
     engagementTrends: Object.entries(_.groupBy(airtableData, 'Program Week'))
-      .sort((a, b) => sortByWeek(a[0], b[0]))
+      .sort((a, b) => {
+        // Extract week numbers and compare them numerically
+        const weekA = parseInt(a[0].match(/Week\s+(\d+)/i)?.[1] || '0');
+        const weekB = parseInt(b[0].match(/Week\s+(\d+)/i)?.[1] || '0');
+        return weekA - weekB;
+      })
       .map(([week, entries]) => ({
         week: formatWeekString(week),
         'High Engagement': entries.filter(e => e['Engagement Participation ']?.includes('3 -')).length,
@@ -437,4 +592,114 @@ export function processData(
   });
 
   return result;
+}
+
+// Add helper function to safely get string field
+function getStringField(entry: EngagementData, field: keyof EngagementData): string {
+  const value = entry[field];
+  return Array.isArray(value) ? value[0] || '' : value || '';
+}
+
+// Update the interface name and structure at the top of the file
+interface ContributorDetail {
+  name: string;
+  githubUsername: string;
+  issuesCompleted: number;
+  engagementScore: number;
+  techPartners: Set<string>;
+  weeks: Set<string>;
+  recentContributions: Array<{
+    issueTitle: string;
+    issueLink: string;
+    week: string;
+    partner: string;
+  }>;
+}
+
+// Then update the function signature
+function processContributorData(csvData: Array<{
+  Name: string;
+  'Github Username': string;
+  'Program Week': string;
+  'How many issues, PRs, or projects this week?': string;
+  'Engagement Participation '?: string;
+  'Issue Title 1'?: string;
+  'Issue Link 1'?: string;
+  'Issue Title 2'?: string;
+  'Issue Link 2'?: string;
+  'Issue Title 3'?: string;
+  'Issue Link 3'?: string;
+  'Which Tech Partner'?: string;
+}>): ContributorDetail[] {
+  const contributorMap = new Map<string, ContributorDetail>();
+
+  csvData.forEach(row => {
+    const key = `${row.Name}-${row['Github Username']}`;
+    
+    if (!contributorMap.has(key)) {
+      contributorMap.set(key, {
+        name: row.Name,
+        githubUsername: row['Github Username'],
+        issuesCompleted: 0,
+        engagementScore: 0,
+        techPartners: new Set(),
+        weeks: new Set(),
+        recentContributions: []
+      });
+    }
+
+    const contributor = contributorMap.get(key)!;
+    const partners = row['Which Tech Partner']?.split(',').map(p => p.trim()) || [''];
+    
+    contributor.weeks.add(row['Program Week']);
+    partners.forEach(partner => {
+      if (partner) contributor.techPartners.add(partner);
+    });
+
+    // Add contributions with partner info
+    if (row['Issue Title 1'] && row['Issue Link 1']) {
+      partners.forEach(partner => {
+        contributor.recentContributions.push({
+          issueTitle: row['Issue Title 1']!,
+          issueLink: row['Issue Link 1']!,
+          week: row['Program Week'],
+          partner: partner || 'Unknown'
+        });
+      });
+    }
+
+    // Similar updates for Issue 2 and 3...
+    if (row['Issue Title 2'] && row['Issue Link 2']) {
+      partners.forEach(partner => {
+        contributor.recentContributions.push({
+          issueTitle: row['Issue Title 2']!,
+          issueLink: row['Issue Link 2']!,
+          week: row['Program Week'],
+          partner: partner || 'Unknown'
+        });
+      });
+    }
+
+    if (row['Issue Title 3'] && row['Issue Link 3']) {
+      partners.forEach(partner => {
+        contributor.recentContributions.push({
+          issueTitle: row['Issue Title 3']!,
+          issueLink: row['Issue Link 3']!,
+          week: row['Program Week'],
+          partner: partner || 'Unknown'
+        });
+      });
+    }
+
+    // Update metrics
+    const issueCount = row['How many issues, PRs, or projects this week?'];
+    contributor.issuesCompleted += issueCount === '4+' ? 4 : parseInt(issueCount || '0');
+    
+    const engagement = row['Engagement Participation ']?.includes('3 -') ? 3 :
+                      row['Engagement Participation ']?.includes('2 -') ? 2 :
+                      row['Engagement Participation ']?.includes('1 -') ? 1 : 0;
+    contributor.engagementScore = Math.max(contributor.engagementScore, engagement);
+  });
+
+  return Array.from(contributorMap.values());
 }
