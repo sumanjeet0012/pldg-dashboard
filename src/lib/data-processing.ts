@@ -5,6 +5,7 @@ import {
   IssueHighlight, EnhancedTechPartnerData, ActionItem,
   GitHubData, IssueMetrics
 } from '@/types/dashboard';
+import * as utils from './utils';
 
 // Types for CSV data structure
 interface WeeklyEngagementEntry {
@@ -115,8 +116,8 @@ function parseTechPartners(techPartner: string | string[]): string[] {
 
 // Helper function to parse week numbers consistently
 function parseWeekNumber(weekString: string): number {
-  const match = weekString.match(/Week #?(\d+)/i);
-  return match ? parseInt(match[1]) : 0;
+  // Use the shared implementation from utils.ts
+  return utils.parseWeekNumber(weekString);
 }
 
 // Helper function to format week string consistently
@@ -477,7 +478,7 @@ function processRawIssueMetrics(entries: EngagementData[]): IssueMetrics[] {
 
 // Add validation helper
 function validateEngagementData(data: any[]): data is EngagementData[] {
-  return data.every(entry => 
+  return data.every(entry =>
     typeof entry === 'object' &&
     typeof entry.Name === 'string' &&
     typeof entry['Program Week'] === 'string' &&
