@@ -8,8 +8,28 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { EnhancedTechPartnerData, ActionableInsight } from '@/types/dashboard';
 import { TimeSeriesView } from './views/TimeSeriesView';
 import { ContributorView } from './views/ContributorView';
-import { AlertCircle, CheckCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle, GitPullRequest } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Button } from '@/components/ui/button';
+
+// Define a type for valid tech partner names
+type TechPartnerName = 'Fil-B' | 'Drand' | 'Libp2p' | 'Storacha' | 'Fil-Oz' | 'IPFS' | 'Coordination Network';
+
+// Define the tech partner repos with the correct type
+const TECH_PARTNER_REPOS: Record<TechPartnerName, string> = {
+  'Fil-B': 'https://github.com/FIL-Builders/fil-frame',
+  'Drand': 'https://github.com/drand/drand/issues?q=is:open+is:issue+label:devguild',
+  'Libp2p': 'https://github.com/libp2p',
+  'Storacha': 'https://github.com/storacha',
+  'Fil-Oz': 'https://github.com/filecoin-project/filecoin-ffi',
+  'IPFS': 'https://github.com/ipfs',
+  'Coordination Network': 'https://github.com/coordnet/coordnet'
+};
+
+// Add a type guard to check if a string is a valid tech partner name
+function isTechPartner(partner: string): partner is TechPartnerName {
+  return partner in TECH_PARTNER_REPOS;
+}
 
 interface TechPartnerChartProps {
   data: EnhancedTechPartnerData[];
@@ -108,22 +128,34 @@ export function TechPartnerChart({ data }: TechPartnerChartProps) {
             <CardTitle>Partner Activity Overview</CardTitle>
             <CardDescription>Comprehensive tech partner engagement metrics</CardDescription>
           </div>
-          <Select
-            value={selectedPartner}
-            onValueChange={setSelectedPartner}
-          >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="All Partners" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Partners</SelectItem>
-              {Array.from(new Set(data.map(item => item.partner))).map(partner => (
-                <SelectItem key={partner} value={partner}>
-                  {partner}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            {selectedPartner && selectedPartner !== 'all' && isTechPartner(selectedPartner) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(TECH_PARTNER_REPOS[selectedPartner], '_blank')}
+                className="flex items-center gap-2"
+              >
+                <GitPullRequest className="h-4 w-4" />
+                View Issues
+              </Button>
+            )}
+            <Select
+              value={selectedPartner}
+              onValueChange={setSelectedPartner}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Select Partner" />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from(new Set(data.map(item => item.partner))).map(partner => (
+                  <SelectItem key={partner} value={partner}>
+                    {partner}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <ToggleGroup
           type="single"
