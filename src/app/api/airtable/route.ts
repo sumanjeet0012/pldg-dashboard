@@ -1,7 +1,45 @@
 import { NextResponse } from 'next/server';
+import { promises as fs } from 'fs';
+import path from 'path';
+import Papa from 'papaparse';
+import { EngagementData } from '@/types/dashboard';
 
 export async function GET() {
   try {
+    // Check if we should use local CSV data
+    const useLocalData = process.env.USE_LOCAL_DATA === 'true';
+    
+    if (useLocalData) {
+      console.log('Using local CSV data...');
+      try {
+        // Read the CSV file from the public directory
+        const csvPath = path.join(process.cwd(), 'public', 'data', 'Weekly Engagement Survey Breakdown (4).csv');
+        const csvData = await fs.readFile(csvPath, 'utf-8');
+        
+        // Parse CSV data
+        const parsedData = Papa.parse<EngagementData>(csvData, {
+          header: true,
+          skipEmptyLines: true,
+          transformHeader: (header) => header.trim()
+        });
+
+        console.log('CSV Data Loaded:', {
+          rowCount: parsedData.data.length,
+          sampleRow: parsedData.data[0],
+          errors: parsedData.errors
+        });
+
+        if (parsedData.errors.length > 0) {
+          console.warn('CSV parsing warnings:', parsedData.errors);
+        }
+
+        return NextResponse.json(parsedData.data);
+      } catch (error) {
+        console.error('Error loading CSV:', error);
+        throw new Error('Failed to load CSV data');
+      }
+    }
+
     console.log('Fetching from Airtable API...');
 
     // Validate environment variables
