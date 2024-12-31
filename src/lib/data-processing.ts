@@ -696,6 +696,12 @@ function calculateEngagementTrends(csvData: any[]): EngagementTrend[] {
   const allWeeks = Array.from(new Set(csvData.map(row => row['Program Week'])))
     .sort((a, b) => parseWeekNumber(a) - parseWeekNumber(b));
 
+  console.log('Week Processing:', {
+    uniqueWeeks: allWeeks,
+    weekCount: allWeeks.length,
+    lastWeek: allWeeks[allWeeks.length - 1]
+  });
+
   // Create a map of week data
   const weeklyData = _.groupBy(csvData, 'Program Week');
 

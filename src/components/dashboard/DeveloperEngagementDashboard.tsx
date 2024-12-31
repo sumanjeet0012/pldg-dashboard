@@ -28,7 +28,7 @@ export default function DeveloperEngagementDashboard() {
     async function loadCSVData() {
       try {
         console.log('Loading CSV data...');
-        const response = await fetch('/data/Weekly Engagement Survey Breakdown (3).csv');
+        const response = await fetch('/data/Weekly Engagement Survey Breakdown (4).csv');
         if (!response.ok) {
           throw new Error(`Failed to fetch CSV: ${response.statusText}`);
         }
@@ -40,16 +40,10 @@ export default function DeveloperEngagementDashboard() {
           transformHeader: (header: string) => header.trim(),
           complete: (results: ParseResult<EngagementData>) => {
             console.log('CSV Parse Results:', {
-              data: results.data.slice(0, 2),
-              errors: results.errors,
-              meta: results.meta
+              weekRange: results.data.map(d => d['Program Week']),
+              totalRows: results.data.length,
+              errors: results.errors
             });
-            
-            if (results.errors.length > 0) {
-              console.error('CSV parsing errors:', results.errors);
-              setErrorCSV('Invalid CSV format');
-              return;
-            }
             setCsvData(results.data);
             setIsLoadingCSV(false);
           },

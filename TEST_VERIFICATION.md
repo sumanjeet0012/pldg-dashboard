@@ -1,12 +1,14 @@
 # TechPartnerChart Component Verification Results
 
 ## Data Display
+
 - ✓ Weeks are displayed in chronological order (Week 2 through Week 11)
 - ✓ Tech partner dropdown filters data correctly (tested with Libp2p)
 - ✓ GitHub profile links are correctly formatted and functional
 - ✓ Tooltips show relevant contributor and issue details
 
 ## UI/UX Features
+
 - ✓ Partner filter is easily accessible via dropdown
 - ✓ Timeline view displays clear engagement trends
 - ✓ Contributors view shows comprehensive metrics:
