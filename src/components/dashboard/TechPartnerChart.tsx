@@ -11,13 +11,14 @@ import { ContributorView } from './views/ContributorView';
 import { AlertCircle, CheckCircle, GitPullRequest } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/use-toast';
 
 // Define a type for valid tech partner names
 type TechPartnerName = 'Fil-B' | 'Drand' | 'Libp2p' | 'Storacha' | 'Fil-Oz' | 'IPFS' | 'Coordination Network';
 
 // Define the tech partner repos with the correct type
 const TECH_PARTNER_REPOS: Record<TechPartnerName, string> = {
-  'Fil-B': 'https://github.com/orgs/FIL-Builders/projects/2/views/2',
+  'Fil-B': 'https://github.com/FIL-Builders/fil-frame',
   'Drand': 'https://github.com/drand/drand/issues?q=is:open+is:issue+label:devguild',
   'Libp2p': 'https://github.com/libp2p',
   'Storacha': 'https://github.com/storacha',
@@ -30,6 +31,23 @@ const TECH_PARTNER_REPOS: Record<TechPartnerName, string> = {
 function isTechPartner(partner: string): partner is TechPartnerName {
   return partner in TECH_PARTNER_REPOS;
 }
+
+// Helper function to ensure URLs are absolute and valid
+const ensureAbsoluteUrl = (url: string | undefined): string => {
+  if (!url) return '#';
+  try {
+    // If it's already a valid URL, return it
+    new URL(url);
+    return url;
+  } catch {
+    // If it's a relative URL, make it absolute
+    if (url.startsWith('/')) {
+      return `https://github.com${url}`;
+    }
+    // If it's invalid, return a safe default
+    return '#';
+  }
+};
 
 interface TechPartnerChartProps {
   data: EnhancedTechPartnerData[];
@@ -65,6 +83,23 @@ export function TechPartnerChart({ data }: TechPartnerChartProps) {
     });
   }, [data]);
 
+  const handleRepoClick = (partner: TechPartnerName) => {
+    try {
+      if (!TECH_PARTNER_REPOS[partner]) {
+        throw new Error(`No repository URL found for ${partner}`);
+      }
+      const url = new URL(TECH_PARTNER_REPOS[partner]);
+      window.open(url.href, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      console.error(`Error opening repository for ${partner}:`, error);
+      toast({
+        title: "Error",
+        description: `Unable to open repository for ${partner}. Please try again later.`,
+        variant: "destructive",
+      });
+    }
+  };
+
   const getHighlightedIssues = (partnerData: EnhancedTechPartnerData): ActionableInsight[] => {
     const insights: ActionableInsight[] = [];
 
@@ -82,7 +117,7 @@ export function TechPartnerChart({ data }: TechPartnerChartProps) {
           type: 'success',
           title: 'Active Issue',
           description: mostActive.title || 'Latest issue',
-          link: mostActive.url || '#'
+          link: ensureAbsoluteUrl(mostActive.url)
         });
       }
     }
@@ -100,7 +135,7 @@ export function TechPartnerChart({ data }: TechPartnerChartProps) {
         type: 'warning',
         title: 'Needs Review',
         description: `${staleIssues.length} stale issue${staleIssues.length > 1 ? 's' : ''}`,
-        link: staleIssues[0]?.url || '#'
+        link: ensureAbsoluteUrl(staleIssues[0]?.url)
       });
     }
 
@@ -133,7 +168,7 @@ export function TechPartnerChart({ data }: TechPartnerChartProps) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => window.open(TECH_PARTNER_REPOS[selectedPartner], '_blank')}
+                onClick={() => handleRepoClick(selectedPartner)}
                 className="flex items-center gap-2"
               >
                 <GitPullRequest className="h-4 w-4" />
@@ -148,6 +183,7 @@ export function TechPartnerChart({ data }: TechPartnerChartProps) {
                 <SelectValue placeholder="Select Partner" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="all">All Partners</SelectItem>
                 {Array.from(new Set(data.map(item => item.partner))).map(partner => (
                   <SelectItem key={partner} value={partner}>
                     {partner}
