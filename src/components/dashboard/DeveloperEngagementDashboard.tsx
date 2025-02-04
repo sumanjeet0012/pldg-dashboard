@@ -15,11 +15,22 @@ import { RefreshCw } from 'lucide-react';
 import { enhanceTechPartnerData } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 import Papa, { ParseResult, ParseConfig, ParseError, Parser } from 'papaparse';
-import { processData } from '@/lib/data-processing';
+import { processData, loadCohortData } from '@/lib/data-processing';
 import { EngagementData } from '@/types/dashboard';
+import { CohortSelector } from './CohortSelector';
+import { CohortId, COHORT_DATA } from '@/types/cohort';
 
 export default function DeveloperEngagementDashboard() {
-  const { data, isLoading, isError, refresh, lastUpdated, isFetching } = useDashboardSystemContext();
+  const { 
+    data, 
+    isLoading, 
+    isError, 
+    refresh, 
+    lastUpdated, 
+    isFetching,
+    selectedCohort,
+    setSelectedCohort 
+  } = useDashboardSystemContext();
   const [csvData, setCsvData] = useState<EngagementData[]>([]);
   const [isLoadingCSV, setIsLoadingCSV] = useState(true);
   const [errorCSV, setErrorCSV] = useState<string | null>(null);
@@ -27,12 +38,8 @@ export default function DeveloperEngagementDashboard() {
   useEffect(() => {
     async function loadCSVData() {
       try {
-        console.log('Loading CSV data...');
-        const response = await fetch('/data/Weekly Engagement Survey Breakdown (4).csv');
-        if (!response.ok) {
-          throw new Error(`Failed to fetch CSV: ${response.statusText}`);
-        }
-        const csvText = await response.text();
+        setIsLoadingCSV(true);
+        const csvText = await loadCohortData(selectedCohort);
         
         Papa.parse<EngagementData>(csvText, {
           header: true,
@@ -40,6 +47,7 @@ export default function DeveloperEngagementDashboard() {
           transformHeader: (header: string) => header.trim(),
           complete: (results: ParseResult<EngagementData>) => {
             console.log('CSV Parse Results:', {
+              cohort: selectedCohort,
               weekRange: results.data.map(d => d['Program Week']),
               totalRows: results.data.length,
               errors: results.errors
@@ -50,15 +58,17 @@ export default function DeveloperEngagementDashboard() {
           error: (error: ParseError): void => {
             console.error('CSV parsing error:', error);
             setErrorCSV(error.message);
+            setIsLoadingCSV(false);
           }
         } as ParseConfig<EngagementData>);
       } catch (error) {
         console.error('Failed to load CSV:', error);
         setErrorCSV(error instanceof Error ? error.message : 'Failed to load data');
+        setIsLoadingCSV(false);
       }
     }
     loadCSVData();
-  }, []);
+  }, [selectedCohort]);
 
   const processedData = csvData.length > 0 ? processData(csvData) : null;
 
@@ -85,6 +95,10 @@ export default function DeveloperEngagementDashboard() {
       lastUpdated: new Date(lastUpdated).toISOString()
     });
   }, [processedData, isLoading, isError, isFetching, lastUpdated, enhancedTechPartnerData]);
+
+  const handleCohortChange = (cohortId: CohortId) => {
+    setSelectedCohort(cohortId);
+  };
 
   if (isLoadingCSV) {
     return <div>Loading CSV data...</div>;
@@ -129,9 +143,15 @@ export default function DeveloperEngagementDashboard() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold">PLDG Developer Engagement</h1>
-            <p className="mt-2 text-indigo-100">Real-time insights and engagement metrics</p>
+            <p className="mt-2 text-indigo-100">
+              {COHORT_DATA[selectedCohort].name} - Real-time insights and engagement metrics
+            </p>
           </div>
           <div className="flex items-center gap-4">
+            <CohortSelector 
+              selectedCohort={selectedCohort}
+              onCohortChange={handleCohortChange}
+            />
             <span className="text-sm text-indigo-200">
               Last updated: {new Date(lastUpdated).toLocaleString()}
             </span>
