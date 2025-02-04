@@ -17,7 +17,7 @@ type TechPartnerName = 'Fil-B' | 'Drand' | 'Libp2p' | 'Storacha' | 'Fil-Oz' | 'I
 
 // Define the tech partner repos with the correct type
 const TECH_PARTNER_REPOS: Record<TechPartnerName, string> = {
-  'Fil-B': 'https://github.com/FIL-Builders/fil-frame',
+  'Fil-B': 'https://github.com/orgs/FIL-Builders/projects/2/views/2',
   'Drand': 'https://github.com/drand/drand/issues?q=is:open+is:issue+label:devguild',
   'Libp2p': 'https://github.com/libp2p',
   'Storacha': 'https://github.com/storacha',
