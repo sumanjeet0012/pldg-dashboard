@@ -10,8 +10,13 @@ export function CohortSelector({ selectedCohort, onCohortChange }: CohortSelecto
   return (
     <div className="flex items-center gap-2">
       <span className="text-sm font-medium">Cohort:</span>
-      <Select value={selectedCohort} onValueChange={(value: CohortId) => onCohortChange(value)}>
-        <SelectTrigger className="w-[180px]">
+      <Select 
+        value={selectedCohort} 
+        onValueChange={(value: CohortId) => onCohortChange(value)}
+        name="cohort-selector"
+        aria-label="Select cohort"
+      >
+        <SelectTrigger className="w-[180px]" aria-label="Cohort selector">
           <SelectValue placeholder="Select Cohort">
             {COHORT_DATA[selectedCohort].name}
           </SelectValue>

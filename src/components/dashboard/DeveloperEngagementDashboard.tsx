@@ -19,11 +19,10 @@ import { processData, loadCohortData } from '@/lib/data-processing';
 import { EngagementData } from '@/types/dashboard';
 import { CohortSelector } from './CohortSelector';
 import { CohortId, COHORT_DATA } from '@/types/cohort';
+import { useCohortData } from '@/hooks/useCohortData';
 
 export default function DeveloperEngagementDashboard() {
   const { 
-    data, 
-    isLoading, 
     isError, 
     refresh, 
     lastUpdated, 
@@ -31,46 +30,17 @@ export default function DeveloperEngagementDashboard() {
     selectedCohort,
     setSelectedCohort 
   } = useDashboardSystemContext();
-  const [csvData, setCsvData] = useState<EngagementData[]>([]);
-  const [isLoadingCSV, setIsLoadingCSV] = useState(true);
-  const [errorCSV, setErrorCSV] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadCSVData() {
-      try {
-        setIsLoadingCSV(true);
-        const csvText = await loadCohortData(selectedCohort);
-        
-        Papa.parse<EngagementData>(csvText, {
-          header: true,
-          skipEmptyLines: true,
-          transformHeader: (header: string) => header.trim(),
-          complete: (results: ParseResult<EngagementData>) => {
-            console.log('CSV Parse Results:', {
-              cohort: selectedCohort,
-              weekRange: results.data.map(d => d['Program Week']),
-              totalRows: results.data.length,
-              errors: results.errors
-            });
-            setCsvData(results.data);
-            setIsLoadingCSV(false);
-          },
-          error: (error: ParseError): void => {
-            console.error('CSV parsing error:', error);
-            setErrorCSV(error.message);
-            setIsLoadingCSV(false);
-          }
-        } as ParseConfig<EngagementData>);
-      } catch (error) {
-        console.error('Failed to load CSV:', error);
-        setErrorCSV(error instanceof Error ? error.message : 'Failed to load data');
-        setIsLoadingCSV(false);
-      }
-    }
-    loadCSVData();
-  }, [selectedCohort]);
+  const {
+    data: csvData,
+    isLoading: isLoadingCSV,
+    error: errorCSV,
+  } = useCohortData(selectedCohort);
 
-  const processedData = csvData.length > 0 ? processData(csvData) : null;
+  const processedData = React.useMemo(() => 
+    csvData.length > 0 ? processData(csvData, null, selectedCohort) : null,
+    [csvData, selectedCohort]
+  );
 
   const enhancedTechPartnerData = React.useMemo(() =>
     processedData?.techPartnerPerformance && processedData?.rawEngagementData
@@ -89,12 +59,12 @@ export default function DeveloperEngagementDashboard() {
         technicalProgress: processedData.technicalProgress.length,
         techPartnerData: enhancedTechPartnerData
       } : null,
-      isLoading,
+      isLoadingCSV,
       isError,
       isFetching,
       lastUpdated: new Date(lastUpdated).toISOString()
     });
-  }, [processedData, isLoading, isError, isFetching, lastUpdated, enhancedTechPartnerData]);
+  }, [processedData, isLoadingCSV, isError, isFetching, lastUpdated, enhancedTechPartnerData]);
 
   const handleCohortChange = (cohortId: CohortId) => {
     setSelectedCohort(cohortId);
@@ -108,7 +78,7 @@ export default function DeveloperEngagementDashboard() {
     return <div>Error: {errorCSV || 'No data available'}</div>;
   }
 
-  if (!processedData && isLoading) {
+  if (!processedData && isLoadingCSV) {
     return (
       <div className="container mx-auto p-4">
         <div className="h-[calc(100vh-200px)] flex items-center justify-center">
