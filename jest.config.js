@@ -11,7 +11,7 @@ const customJestConfig = {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   transform: {
-    '^.+\\.(ts|tsx|js|jsx|mjs)$': 'babel-jest',
+    '^.+\\.(ts|tsx|js|jsx|mjs)$': ['babel-jest', { configFile: './babel.config.test.js' }]
   },
   transformIgnorePatterns: [
     'node_modules/(?!(uuid|exceljs|@tremor|d3-*)/)',
