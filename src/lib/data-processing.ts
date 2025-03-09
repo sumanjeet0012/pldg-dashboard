@@ -857,3 +857,10 @@ function processContributorData(csvData: Array<{
 
   return Array.from(contributorMap.values());
 }
+
+export function mergeCohortData(
+  cohort1Data: EngagementData[], 
+  cohort2Data: EngagementData[]
+): EngagementData[] {
+  return [...cohort1Data, ...cohort2Data];
+}
