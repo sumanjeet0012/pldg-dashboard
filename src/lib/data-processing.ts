@@ -864,3 +864,70 @@ export function mergeCohortData(
 ): EngagementData[] {
   return [...cohort1Data, ...cohort2Data];
 }
+
+export function filterMergeCohortData(
+  data: EngagementData[],
+  cohort: string
+): EngagementData[] {
+  if (cohort !== 'all') {
+    return data.filter(record => record.cohortId === cohort);
+  }
+  
+  const userMap = new Map<string, EngagementData>();
+  
+  data.forEach(record => {
+    const userName = record.Name.toLowerCase().trim();
+    
+    if (!userMap.has(userName)) {
+      userMap.set(userName, {...record});
+    } else {
+      const existingRecord = userMap.get(userName)!;
+      
+      const existingIssueCount = existingRecord['How many issues, PRs, or projects this week?'];
+      const currentIssueCount = record['How many issues, PRs, or projects this week?'];
+      
+      const existingCount = existingIssueCount === '4+' ? 4 : parseInt(existingIssueCount || '0');
+      const currentCount = currentIssueCount === '4+' ? 4 : parseInt(currentIssueCount || '0');
+      const totalCount = existingCount + currentCount;
+      
+      existingRecord['How many issues, PRs, or projects this week?'] = totalCount.toString();
+      
+      const existingPartners = Array.isArray(existingRecord['Which Tech Partner']) 
+        ? existingRecord['Which Tech Partner'] 
+        : [existingRecord['Which Tech Partner']];
+      
+      const currentPartners = Array.isArray(record['Which Tech Partner'])
+        ? record['Which Tech Partner']
+        : [record['Which Tech Partner']];
+      
+      existingRecord['Which Tech Partner'] = [...new Set([...existingPartners, ...currentPartners])];
+      
+      existingRecord.cohortId = 'all';
+      
+      for (let i = 1; i <= 3; i++) {
+        const titleKey = `Issue Title ${i}` as keyof EngagementData;
+        const linkKey = `Issue Link ${i}` as keyof EngagementData;
+        
+        if (record[titleKey] && record[linkKey]) {
+          let emptySlot = 0;
+          for (let j = 1; j <= 3; j++) {
+            const checkTitleKey = `Issue Title ${j}` as keyof EngagementData;
+            if (!existingRecord[checkTitleKey]) {
+              emptySlot = j;
+              break;
+            }
+          }
+          
+          if (emptySlot > 0) {
+            const newTitleKey = `Issue Title ${emptySlot}` as keyof EngagementData;
+            const newLinkKey = `Issue Link ${emptySlot}` as keyof EngagementData;
+            existingRecord[newTitleKey] = record[titleKey];
+            existingRecord[newLinkKey] = record[linkKey];
+          }
+        }
+      }
+    }
+  });
+  
+  return Array.from(userMap.values());
+}
