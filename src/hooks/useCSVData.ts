@@ -2,17 +2,17 @@ import { useState, useEffect } from 'react';
 import Papa, { ParseResult, ParseConfig } from 'papaparse';
 import { EngagementData } from '@/types/dashboard';
 
-export function useCSVData() {
+export function useCSVData(cohort: string = 'cohort-1') {
   const [data, setData] = useState<EngagementData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
   const [timestamp, setTimestamp] = useState<number>(0);
-
+  const csvUrl = `/data/${cohort}/weekly-engagement-data.csv`;
   useEffect(() => {
     async function fetchCSV() {
       try {
         console.log('Fetching CSV data...');
-        const response = await fetch('/data/weekly-engagement-data.csv', {
+        const response = await fetch(csvUrl, {
           method: 'GET',
           headers: {
             'Accept': 'text/csv'
