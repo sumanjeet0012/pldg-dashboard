@@ -89,7 +89,14 @@ export function useCSVData(cohort: string = 'cohort-1') {
             fields: results.meta.fields,
             errors: results.errors
           });
-          setData(results.data);
+
+          // Add cohortId to each record
+          const dataWithCohortId = results.data.map(record => ({
+            ...record,
+            cohortId: cohort
+          }));
+
+          setData(dataWithCohortId);
           setIsLoading(false);
           setTimestamp(Date.now());
         },
