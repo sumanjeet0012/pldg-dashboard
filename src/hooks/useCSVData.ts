@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Papa, { ParseResult, ParseConfig } from 'papaparse';
 import { EngagementData } from '@/types/dashboard';
+import { validateCSVData } from '@/lib/validation';
 
 export function useCSVData(cohort: string = 'cohort-1') {
   const [data, setData] = useState<EngagementData[]>([]);
@@ -96,7 +97,10 @@ export function useCSVData(cohort: string = 'cohort-1') {
             cohortId: cohort
           }));
 
-          setData(dataWithCohortId);
+          // Validate the data
+          const validatedData = validateCSVData(dataWithCohortId);
+
+          setData(validatedData);
           setIsLoading(false);
           setTimestamp(Date.now());
         },
