@@ -629,6 +629,7 @@ function calculateTotalContributions(csvData: any[]): number {
 // Update the processData function to return all required ProcessedData fields
 export function processData(
   csvData: any[],
+  cohortId: string,
   githubData?: GitHubData | null
 ): ProcessedData {
   console.log('Processing data:', {
@@ -640,6 +641,11 @@ export function processData(
   const techPartnerPerformance = processCSVData(csvData);
   console.log('Tech Partner Performance:', techPartnerPerformance);
 
+  // Tagged csvData with cohortId
+  csvData = csvData.map(row => ({
+    ...row,
+    cohortId
+  }));
   // Calculate core metrics with validation
   const activeContributors = new Set(csvData.filter(row => row.Name).map(row => row.Name)).size;
   const totalContributions = calculateTotalContributions(csvData);
