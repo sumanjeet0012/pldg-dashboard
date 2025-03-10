@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react';
 import Papa, { ParseResult, ParseConfig, ParseError, Parser } from 'papaparse';
 import { processData } from '@/lib/data-processing';
 import { EngagementData } from '@/types/dashboard';
+import CohortSelector from './CohortSelector';
 
 export default function DeveloperEngagementDashboard() {
   const { data, isLoading, isError, refresh, lastUpdated, isFetching } = useDashboardSystemContext();
@@ -130,6 +131,10 @@ export default function DeveloperEngagementDashboard() {
           <div>
             <h1 className="text-3xl font-bold">PLDG Developer Engagement</h1>
             <p className="mt-2 text-indigo-100">Real-time insights and engagement metrics</p>
+            {/* Insert CohortSelector here */}
+            <div className="mt-4">
+              <CohortSelector />
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-indigo-200">
@@ -188,4 +193,4 @@ export default function DeveloperEngagementDashboard() {
       </div>
     </div>
   );
-} 
+}
