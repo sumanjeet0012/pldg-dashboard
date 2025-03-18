@@ -23,7 +23,6 @@ export interface EngagementData {
   'Issue Link 2'?: string | string[];
   'Issue Title 3'?: string | string[];
   'Issue Link 3'?: string | string[];
-  cohortId: string;
   [key: string]: string | string[] | undefined;
 }
 
