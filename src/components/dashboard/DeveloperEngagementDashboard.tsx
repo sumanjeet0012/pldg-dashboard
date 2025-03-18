@@ -17,7 +17,7 @@ import Papa, { ParseResult, ParseConfig, ParseError, Parser } from 'papaparse';
 import { processData } from '@/lib/data-processing';
 import { EngagementData, ProcessedData } from '@/types/dashboard';
 import CohortSelector from './CohortSelector';
-import { useCohortContext } from '@/context/CohortContext';
+// import { useCohortContext } from '@/context/CohortContext';
 
 // Export processed data for both cohorts
 export let processedDataCohort1: ProcessedData | null = null;
@@ -25,7 +25,8 @@ export let processedDataCohort2: ProcessedData | null = null;
 
 export default function DeveloperEngagementDashboard() {
   const { data, isLoading, isError, refresh, lastUpdated, isFetching } = useDashboardSystemContext();
-  const { selectedCohort } = useCohortContext();
+  // const { selectedCohort } = useCohortContext();
+  const selectedCohort = 'Cohort 1';
   const [csvDataCohort1, setCsvDataCohort1] = useState<EngagementData[]>([]);
   const [csvDataCohort2, setCsvDataCohort2] = useState<EngagementData[]>([]);
   const [isLoadingCSV, setIsLoadingCSV] = useState(true);
@@ -76,7 +77,7 @@ export default function DeveloperEngagementDashboard() {
   // Process data for cohort 1 and update the exported variable
   useEffect(() => {
     if (csvDataCohort1.length > 0) {
-      processedDataCohort1 = processData(csvDataCohort1, 'cohort-1');
+      processedDataCohort1 = processData(csvDataCohort1);
       console.log('Processed data for cohort 1 is ready');
       
       // If this is the currently selected cohort or no cohort is selected, update the state
@@ -94,7 +95,7 @@ export default function DeveloperEngagementDashboard() {
   // Process data for cohort 2 and update the exported variable
   useEffect(() => {
     if (csvDataCohort2.length > 0) {
-      processedDataCohort2 = processData(csvDataCohort2, 'cohort-2');
+      processedDataCohort2 = processData(csvDataCohort2);
       console.log('Processed data for cohort 2 is ready');
       
       // If this is the currently selected cohort, update the state
@@ -174,16 +175,16 @@ export default function DeveloperEngagementDashboard() {
     </div>;
   }
 
-  if (!currentProcessedData) {
-    return <div className="container mx-auto p-4">
-      <div className="p-4 text-center text-amber-600">
-        No data available for the selected cohort. Please select a different cohort.
-        <div className="mt-4">
-          <CohortSelector />
-        </div>
-      </div>
-    </div>;
-  }
+  // if (!currentProcessedData) {
+  //   return <div className="container mx-auto p-4">
+  //     <div className="p-4 text-center text-amber-600">
+  //       No data available for the selected cohort. Please select a different cohort.
+  //       <div className="mt-4">
+  //         <CohortSelector />
+  //       </div>
+  //     </div>
+  //   </div>;
+  // }
 
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -194,9 +195,9 @@ export default function DeveloperEngagementDashboard() {
             <h1 className="text-3xl font-bold">PLDG Developer Engagement</h1>
             <p className="mt-2 text-indigo-100">Real-time insights and engagement metrics</p>
             {/* Insert CohortSelector here */}
-            <div className="mt-4">
+            {/* <div className="mt-4">
               <CohortSelector />
-            </div>
+            </div> */}
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-indigo-200">
