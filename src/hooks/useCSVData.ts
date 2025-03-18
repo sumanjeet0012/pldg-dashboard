@@ -1,18 +1,19 @@
 import { useState, useEffect } from 'react';
 import Papa, { ParseResult, ParseConfig } from 'papaparse';
 import { EngagementData } from '@/types/dashboard';
+import { validateCSVData } from '@/lib/validation';
 
-export function useCSVData() {
+export function useCSVData(cohort: string = 'cohort-1') {
   const [data, setData] = useState<EngagementData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
   const [timestamp, setTimestamp] = useState<number>(0);
-
+  const csvUrl = `/data/${cohort}/weekly-engagement-data.csv`;
   useEffect(() => {
     async function fetchCSV() {
       try {
         console.log('Fetching CSV data...');
-        const response = await fetch('/data/weekly-engagement-data.csv', {
+        const response = await fetch(csvUrl, {
           method: 'GET',
           headers: {
             'Accept': 'text/csv'
@@ -89,7 +90,17 @@ export function useCSVData() {
             fields: results.meta.fields,
             errors: results.errors
           });
-          setData(results.data);
+
+          // Add cohortId to each record
+          const dataWithCohortId = results.data.map(record => ({
+            ...record,
+            cohortId: cohort
+          }));
+
+          // Validate the data
+          const validatedData = validateCSVData(dataWithCohortId);
+
+          setData(validatedData);
           setIsLoading(false);
           setTimestamp(Date.now());
         },
