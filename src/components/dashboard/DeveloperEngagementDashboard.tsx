@@ -16,7 +16,7 @@ import { enhanceTechPartnerData } from '@/lib/utils';
 import Papa, { ParseResult, ParseConfig, ParseError, Parser } from 'papaparse';
 import { processData } from '@/lib/data-processing';
 import { EngagementData, ProcessedData } from '@/types/dashboard';
-import CohortSelector from './CohortSelector';
+// import CohortSelector from './CohortSelector';
 // import { useCohortContext } from '@/context/CohortContext';
 
 // Export processed data for both cohorts
@@ -138,7 +138,7 @@ export default function DeveloperEngagementDashboard() {
         technicalProgress: currentProcessedData.technicalProgress.length,
         techPartnerData: enhancedTechPartnerData
       } : null,
-      isLoadingCSV,
+      isLoading,
       isError,
       isFetching,
       lastUpdated: new Date(lastUpdated).toISOString()
@@ -200,10 +200,6 @@ export default function DeveloperEngagementDashboard() {
             </div> */}
           </div>
           <div className="flex items-center gap-4">
-            <CohortSelector 
-              selectedCohort={selectedCohort}
-              onCohortChange={handleCohortChange}
-            />
             <span className="text-sm text-indigo-200">
               Last updated: {new Date(lastUpdated).toLocaleString()}
             </span>
