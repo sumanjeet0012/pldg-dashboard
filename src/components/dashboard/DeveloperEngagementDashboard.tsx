@@ -138,7 +138,7 @@ export default function DeveloperEngagementDashboard() {
         technicalProgress: currentProcessedData.technicalProgress.length,
         techPartnerData: enhancedTechPartnerData
       } : null,
-      isLoading,
+      isLoadingCSV,
       isError,
       isFetching,
       lastUpdated: new Date(lastUpdated).toISOString()
@@ -200,6 +200,10 @@ export default function DeveloperEngagementDashboard() {
             </div> */}
           </div>
           <div className="flex items-center gap-4">
+            <CohortSelector 
+              selectedCohort={selectedCohort}
+              onCohortChange={handleCohortChange}
+            />
             <span className="text-sm text-indigo-200">
               Last updated: {new Date(lastUpdated).toLocaleString()}
             </span>
